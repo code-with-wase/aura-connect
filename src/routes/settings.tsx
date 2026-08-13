@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Loader2, LogOut } from "lucide-react";
+import { Loader2, LogOut, Wallpaper as WallpaperIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell, PageHeader } from "@/components/aura/app-shell";
 import { UserAvatar } from "@/components/aura/user-avatar";
+import { WallpaperPicker, useChatWallpaper } from "@/components/aura/wallpaper-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -207,6 +208,27 @@ function SettingsPage() {
             aria-label="Toggle online presence"
           />
         </section>
+
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 md:p-6">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-foreground">Chat wallpaper</h2>
+            <p className="text-sm text-muted-foreground">
+              Default background for every conversation — current: {defaultWallpaper.label}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span
+              className="h-12 w-20 shrink-0 rounded-md border border-border"
+              style={defaultWallpaper.style}
+              aria-hidden
+            />
+            <Button variant="outline" onClick={() => setWallpaperOpen(true)}>
+              <WallpaperIcon className="mr-2 h-4 w-4" />
+              Change
+            </Button>
+          </div>
+        </section>
+        <WallpaperPicker open={wallpaperOpen} onOpenChange={setWallpaperOpen} />
       </div>
     </>
   );
