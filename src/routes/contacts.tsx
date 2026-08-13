@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Contact, User } from "@/lib/api-types";
 import { getApiErrorMessage } from "@/lib/axios";
 import { chatService } from "@/services/chatService";
-import { contactService } from "@/services/contactService";
+import { contactService, type SearchResult } from "@/services/contactService";
 
 export const Route = createFileRoute("/contacts")({
   head: () => ({
@@ -43,7 +43,8 @@ function ContactsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [term, setTerm] = useState("");
-  const [results, setResults] = useState<User[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -84,6 +85,7 @@ function ContactsPage() {
     setSearching(true);
     try {
       setResults(await contactService.search(term.trim()));
+      setSearched(true);
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Search failed"));
     } finally {
@@ -176,10 +178,19 @@ function ContactsPage() {
                 {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
               </Button>
             </form>
-            {results.length === 0 && !searching && (
-              <EmptyState title="Search for colleagues" description="Results will appear here." />
+            {searching && <LoadingState label="Searching…" />}
+            {!searching && results.length === 0 && (
+              <EmptyState
+                title={searched ? "No people found" : "Search for colleagues"}
+                description={
+                  searched
+                    ? "Try a different name, username, email or phone number."
+                    : "Results will appear here."
+                }
+              />
             )}
-            {results.map((person) => (
+            {!searching &&
+              results.map(({ user: person, isContact, isBlocked }) => (
               <div
                 key={person._id}
                 className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3"
@@ -189,16 +200,46 @@ function ContactsPage() {
                   <p className="truncate text-sm font-medium text-foreground">{person.name}</p>
                   <p className="truncate text-xs text-muted-foreground">@{person.username}</p>
                 </div>
-                <Button
-                  size="sm"
-                  disabled={busyId === person._id}
-                  onClick={() =>
-                    void runAction(person._id, () => contactService.add(person._id), "Contact added")
-                  }
-                >
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Add
-                </Button>
+                {isBlocked ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busyId === person._id}
+                    onClick={() =>
+                      void runAction(
+                        person._id,
+                        () => contactService.unblock(person._id),
+                        "Contact unblocked",
+                      )
+                    }
+                  >
+                    <ShieldOff className="mr-2 h-4 w-4" />
+                    Unblock
+                  </Button>
+                ) : isContact ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busyId === person._id}
+                    onClick={() =>
+                      void runAction(person._id, () => chatService.createPrivate(person._id), "Chat ready")
+                    }
+                  >
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Message
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    disabled={busyId === person._id}
+                    onClick={() =>
+                      void runAction(person._id, () => contactService.add(person._id), "Contact added")
+                    }
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Add
+                  </Button>
+                )}
               </div>
             ))}
           </TabsContent>
