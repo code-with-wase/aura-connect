@@ -71,10 +71,6 @@ function ContactsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   // Check and request device contact permissions on mount
   useEffect(() => {
     void (async () => {
@@ -82,6 +78,10 @@ function ContactsPage() {
       setPermissionStatus(status);
     })();
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function requestContactsPermission() {
     setPermissionRequested(true);
@@ -232,7 +232,7 @@ function ContactsPage() {
             {!loading && !error && contacts.length === 0 && (
               <EmptyState
                 title="No contacts yet"
-                description='Use "Contacts on Aura" or "Find people" to add your first contact.'
+                description="Use "Contacts on Aura" or "Find people" to add your first contact."
               />
             )}
             {!loading &&
