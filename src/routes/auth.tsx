@@ -1,15 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, Lock, MessagesSquare, Users2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRight, Check, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { NexoraMark, NexoraWordmark } from "@/components/aura/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/auth-context";
 import { getApiErrorMessage } from "@/lib/axios";
-import { NexoraMark, NexoraWordmark } from "@/components/aura/brand";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -29,6 +30,80 @@ export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+function passwordScore(value: string) {
+  let score = 0;
+  if (value.length >= 6) score += 1;
+  if (value.length >= 10) score += 1;
+  if (/[A-Z]/.test(value) && /[a-z]/.test(value)) score += 1;
+  if (/[0-9]/.test(value)) score += 1;
+  if (/[^A-Za-z0-9]/.test(value)) score += 1;
+  return Math.min(score, 4);
+}
+
+const STRENGTH_LABEL = ["Too short", "Weak", "Fair", "Good", "Strong"];
+
+function PasswordField({
+  id,
+  label,
+  value,
+  onChange,
+  minLength,
+  autoComplete,
+  showStrength,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  minLength?: number;
+  autoComplete?: string;
+  showStrength?: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+  const score = passwordScore(value);
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="relative">
+        <Input
+          id={id}
+          type={visible ? "text" : "password"}
+          required
+          minLength={minLength ?? undefined}
+          autoComplete={autoComplete ?? undefined}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="pr-10"
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+          aria-label={visible ? "Hide password" : "Show password"}
+        >
+          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+      {showStrength && value.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex gap-1">
+            {[0, 1, 2, 3].map((i) => (
+              <span
+                key={i}
+                className={cn(
+                  "h-1 flex-1 rounded-full transition-colors",
+                  i < score ? "bg-accent" : "bg-border",
+                )}
+              />
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">Password strength: {STRENGTH_LABEL[score]}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AuthPage() {
   const { login, register, user, loading } = useAuth();
   const navigate = useNavigate();
@@ -47,6 +122,27 @@ function AuthPage() {
   useEffect(() => {
     if (!loading && user) void navigate({ to: "/" });
   }, [loading, user, navigate]);
+
+  const loginReady = loginForm.identifier.trim().length > 2 && loginForm.password.length >= 6;
+  const usernameError = useMemo(() => {
+    if (!signupForm.username) return null;
+    if (signupForm.username.length < 3) return "At least 3 characters";
+    if (!/^[a-zA-Z0-9._]+$/.test(signupForm.username)) return "Only letters, numbers, dot and underscore";
+    return null;
+  }, [signupForm.username]);
+  const phoneError = useMemo(() => {
+    if (!signupForm.phone) return null;
+    if (!/^[0-9]{10,15}$/.test(signupForm.phone)) return "Enter 10–15 digits";
+    return null;
+  }, [signupForm.phone]);
+  const signupReady =
+    signupForm.name.trim().length >= 2 &&
+    !usernameError &&
+    signupForm.username.length >= 3 &&
+    /\S+@\S+\.\S+/.test(signupForm.email) &&
+    !phoneError &&
+    signupForm.phone.length >= 10 &&
+    signupForm.password.length >= 6;
 
   async function handleLogin(event: React.FormEvent) {
     event.preventDefault();
@@ -77,55 +173,31 @@ function AuthPage() {
   }
 
   return (
-    <main className="grid min-h-screen bg-background lg:grid-cols-[1.05fr_1fr]">
-      <section className="nx-brand-gradient relative hidden flex-col justify-between overflow-hidden p-12 lg:flex">
-        <div className="nx-grid-bg absolute inset-0 opacity-15" aria-hidden />
-        <div className="relative flex items-center gap-3">
-          <NexoraMark className="h-10 w-10 bg-white/15 shadow-none" />
-          <NexoraWordmark className="text-accent-foreground" />
-        </div>
-        <div className="relative max-w-md text-accent-foreground">
-          <h2 className="text-3xl font-semibold leading-tight tracking-tight">
-            Enterprise messaging, built for focused teams.
-          </h2>
-          <p className="mt-3 text-sm text-accent-foreground/80">
-            Real-time chats, groups, calls and status updates in one secure workspace.
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10">
+      <div className="nx-grid-bg absolute inset-0 opacity-40" aria-hidden />
+      <div
+        className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[38rem] -translate-x-1/2 rounded-full opacity-30 blur-3xl"
+        style={{ background: "radial-gradient(circle, var(--accent) 0%, transparent 70%)" }}
+        aria-hidden
+      />
+
+      <div className="nx-rise relative w-full max-w-md">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <NexoraMark className="h-12 w-12" />
+          <div className="mt-3">
+            <NexoraWordmark />
+          </div>
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight text-foreground">
+            {tab === "login" ? "Welcome back" : "Create your account"}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {tab === "login"
+              ? "Sign in to your Nexora workspace to continue."
+              : "A few details and your workspace is ready."}
           </p>
-          <ul className="mt-8 space-y-3 text-sm text-accent-foreground/90">
-            <li className="flex items-center gap-3">
-              <MessagesSquare className="h-4 w-4" /> Instant direct and group messaging
-            </li>
-            <li className="flex items-center gap-3">
-              <Users2 className="h-4 w-4" /> Roles, permissions and member controls
-            </li>
-            <li className="flex items-center gap-3">
-              <Lock className="h-4 w-4" /> Privacy controls and blocked-user management
-            </li>
-          </ul>
         </div>
-        <p className="relative text-xs text-accent-foreground/70">
-          &copy; {new Date().getFullYear()} Nexora
-        </p>
-      </section>
 
-      <section className="flex items-center justify-center px-4 py-12 sm:px-8">
-        <div className="nx-rise w-full max-w-md">
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <NexoraMark className="h-10 w-10" />
-            <div>
-              <NexoraWordmark />
-              <p className="text-sm text-muted-foreground">Secure messaging for modern teams</p>
-            </div>
-          </div>
-
-          <div className="mb-6 hidden lg:block">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Welcome back</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Sign in to your Nexora workspace to continue.
-            </p>
-          </div>
-
-          <div className="nx-elevate rounded-2xl border border-border bg-surface p-6 sm:p-7">
+        <div className="nx-elevate rounded-2xl border border-border bg-surface p-6 sm:p-7">
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Sign in</TabsTrigger>
@@ -139,25 +211,34 @@ function AuthPage() {
                   <Input
                     id="identifier"
                     required
+                    autoComplete="username"
                     value={loginForm.identifier}
                     onChange={(e) => setLoginForm({ ...loginForm, identifier: e.target.value })}
                     placeholder="you@company.com"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    required
-                    value={loginForm.password}
-                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={busy}>
-                  {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <PasswordField
+                  id="password"
+                  label="Password"
+                  autoComplete="current-password"
+                  value={loginForm.password}
+                  onChange={(value) => setLoginForm({ ...loginForm, password: value })}
+                />
+                <Button type="submit" className="group w-full" disabled={busy || !loginReady}>
+                  {busy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <ArrowRight className="mr-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                  )}
                   Sign in
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => setTab("register")}
+                  className="w-full text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  New to Nexora? <span className="font-medium text-accent">Create an account</span>
+                </button>
               </form>
             </TabsContent>
 
@@ -176,14 +257,21 @@ function AuthPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="username">Username</Label>
-                    <Input
-                      id="username"
-                      required
-                      minLength={3}
-                      pattern="[a-zA-Z0-9._]+"
-                      value={signupForm.username}
-                      onChange={(e) => setSignupForm({ ...signupForm, username: e.target.value })}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="username"
+                        required
+                        minLength={3}
+                        pattern="[a-zA-Z0-9._]+"
+                        className="pr-8"
+                        value={signupForm.username}
+                        onChange={(e) => setSignupForm({ ...signupForm, username: e.target.value })}
+                      />
+                      {signupForm.username && !usernameError && (
+                        <Check className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-accent" />
+                      )}
+                    </div>
+                    {usernameError && <p className="text-xs text-destructive">{usernameError}</p>}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -201,37 +289,47 @@ function AuthPage() {
                   <Input
                     id="phone"
                     required
+                    inputMode="numeric"
                     minLength={10}
                     maxLength={15}
                     pattern="[0-9]+"
                     value={signupForm.phone}
-                    onChange={(e) => setSignupForm({ ...signupForm, phone: e.target.value })}
+                    onChange={(e) =>
+                      setSignupForm({ ...signupForm, phone: e.target.value.replace(/[^0-9]/g, "") })
+                    }
                   />
+                  {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="new-password">Password</Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    required
-                    minLength={6}
-                    value={signupForm.password}
-                    onChange={(e) => setSignupForm({ ...signupForm, password: e.target.value })}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={busy}>
+                <PasswordField
+                  id="new-password"
+                  label="Password"
+                  autoComplete="new-password"
+                  minLength={6}
+                  showStrength
+                  value={signupForm.password}
+                  onChange={(value) => setSignupForm({ ...signupForm, password: value })}
+                />
+                <Button type="submit" className="w-full" disabled={busy || !signupReady}>
                   {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create account
                 </Button>
+                <button
+                  type="button"
+                  onClick={() => setTab("login")}
+                  className="w-full text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Already have an account? <span className="font-medium text-accent">Sign in</span>
+                </button>
               </form>
             </TabsContent>
           </Tabs>
-          </div>
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            Protected workspace. By continuing you agree to Nexora&apos;s acceptable use policy.
-          </p>
         </div>
-      </section>
+
+        <p className="mt-6 flex items-center justify-center gap-2 text-center text-xs text-muted-foreground">
+          <ShieldCheck className="h-3.5 w-3.5" />
+          Protected workspace. By continuing you agree to Nexora&apos;s acceptable use policy.
+        </p>
+      </div>
     </main>
   );
 }
