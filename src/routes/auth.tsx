@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Loader2, ShieldCheck } from "lucide-react";
+import { Loader2, Lock, MessagesSquare, Users2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/context/auth-context";
 import { getApiErrorMessage } from "@/lib/axios";
+import { NexoraMark, NexoraWordmark } from "@/components/aura/brand";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
