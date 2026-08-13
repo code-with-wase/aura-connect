@@ -72,6 +72,13 @@ function ContactsPage() {
       await action();
       toast.success(message);
       await load();
+      if (searched && term.trim()) {
+        try {
+          setResults(await contactService.search(term.trim()));
+        } catch {
+          /* keep previous results if the refresh fails */
+        }
+      }
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Action failed"));
     } finally {
