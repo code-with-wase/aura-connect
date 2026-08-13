@@ -12,11 +12,14 @@ export function getSocket(): Socket | null {
   if (!socket) {
     socket = io(API_BASE_URL, {
       auth: { token },
-      transports: ["websocket"],
+      transports: ["websocket", "polling"],
       autoConnect: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: 3,
+      timeout: 8000,
     });
     socket.on("connect", () => socket?.emit("presence:online"));
+    // The deployed backend runs on serverless functions, so realtime may be unavailable.
+    socket.on("connect_error", () => undefined);
   }
   return socket;
 }
