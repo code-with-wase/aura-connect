@@ -1,8 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
-  createRootRouteWithContext,
+  createRootRoute,
   useRouter,
   HeadContent,
   Scripts,
@@ -13,6 +12,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/context/auth-context";
 
 function NotFoundComponent() {
   return (
@@ -74,21 +74,22 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Nexora — Messaging, refined" },
+      { title: "Aura Connect — Secure team messaging" },
       {
         name: "description",
-        content: "Nexora is a premium messaging workspace built for calm, focused conversations.",
+        content:
+          "Aura Connect is a secure enterprise messaging workspace for chats, groups, calls and status updates.",
       },
-      { name: "author", content: "Nexora" },
-      { property: "og:title", content: "Nexora — Messaging, refined" },
+      { name: "author", content: "Aura Connect" },
+      { property: "og:title", content: "Aura Connect — Secure team messaging" },
       {
         property: "og:description",
-        content: "A premium messaging workspace built for calm, focused conversations.",
+        content: "Secure enterprise messaging with chats, groups, calls, status and notifications.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -129,15 +130,13 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={200}>
+    <TooltipProvider delayDuration={200}>
+      <AuthProvider>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+        <Toaster position="top-right" />
+      </AuthProvider>
+    </TooltipProvider>
   );
 }
