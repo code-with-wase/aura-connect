@@ -19,12 +19,12 @@ import { userService } from "@/services/userService";
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
-      { title: "Profile & settings — Aura Connect" },
+      { title: "Profile & settings — Nexora" },
       {
         name: "description",
-        content: "Update your Aura Connect profile, privacy controls, read receipts and online presence.",
+        content: "Update your Nexora profile, privacy controls, read receipts and online presence.",
       },
-      { property: "og:title", content: "Profile & settings — Aura Connect" },
+      { property: "og:title", content: "Profile & settings — Nexora" },
       { property: "og:description", content: "Update your profile, privacy controls and presence." },
     ],
   }),

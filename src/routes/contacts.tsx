@@ -17,12 +17,12 @@ import { contactService } from "@/services/contactService";
 export const Route = createFileRoute("/contacts")({
   head: () => ({
     meta: [
-      { title: "Contacts — Aura Connect" },
+      { title: "Contacts — Nexora" },
       {
         name: "description",
-        content: "Manage your Aura Connect contacts, search colleagues and control blocked users.",
+        content: "Manage your Nexora contacts, search colleagues and control blocked users.",
       },
-      { property: "og:title", content: "Contacts — Aura Connect" },
+      { property: "og:title", content: "Contacts — Nexora" },
       { property: "og:description", content: "Manage contacts, search colleagues and blocked users." },
     ],
   }),

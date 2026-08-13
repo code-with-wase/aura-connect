@@ -14,12 +14,12 @@ import { callService } from "@/services/callService";
 export const Route = createFileRoute("/calls")({
   head: () => ({
     meta: [
-      { title: "Calls — Aura Connect" },
+      { title: "Calls — Nexora" },
       {
         name: "description",
-        content: "Review your Aura Connect audio and video call history with durations and outcomes.",
+        content: "Review your Nexora audio and video call history with durations and outcomes.",
       },
-      { property: "og:title", content: "Calls — Aura Connect" },
+      { property: "og:title", content: "Calls — Nexora" },
       { property: "og:description", content: "Audio and video call history with durations and outcomes." },
     ],
   }),

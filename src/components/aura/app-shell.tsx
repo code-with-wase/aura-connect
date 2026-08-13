@@ -32,7 +32,7 @@ const NAV = [
 function useTheme() {
   const [dark, setDark] = useState(false);
   useEffect(() => {
-    const stored = window.localStorage.getItem("aura-theme");
+    const stored = window.localStorage.getItem("nexora-theme");
     const isDark = stored === "dark";
     setDark(isDark);
     document.documentElement.classList.toggle("dark", isDark);
@@ -41,7 +41,7 @@ function useTheme() {
     const next = !dark;
     setDark(next);
     document.documentElement.classList.toggle("dark", next);
-    window.localStorage.setItem("aura-theme", next ? "dark" : "light");
+    window.localStorage.setItem("nexora-theme", next ? "dark" : "light");
   };
   return { dark, toggle };
 }

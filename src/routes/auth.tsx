@@ -13,12 +13,12 @@ import { getApiErrorMessage } from "@/lib/axios";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Sign in — Aura Connect" },
+      { title: "Sign in — Nexora" },
       {
         name: "description",
-        content: "Sign in or create your Aura Connect account to access secure team messaging.",
+        content: "Sign in or create your Nexora account to access secure team messaging.",
       },
-      { property: "og:title", content: "Sign in — Aura Connect" },
+      { property: "og:title", content: "Sign in — Nexora" },
       {
         property: "og:description",
         content: "Access secure enterprise messaging, groups, calls and status updates.",
@@ -83,7 +83,7 @@ function AuthPage() {
             <ShieldCheck className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-foreground">Aura Connect</h1>
+            <h1 className="text-xl font-semibold text-foreground">Nexora</h1>
             <p className="text-sm text-muted-foreground">Secure messaging for modern teams</p>
           </div>
         </div>

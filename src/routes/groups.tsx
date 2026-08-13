@@ -39,12 +39,12 @@ import { userService } from "@/services/userService";
 export const Route = createFileRoute("/groups")({
   head: () => ({
     meta: [
-      { title: "Groups — Aura Connect" },
+      { title: "Groups — Nexora" },
       {
         name: "description",
-        content: "Create groups, manage members, admins, permissions and notifications on Aura Connect.",
+        content: "Create groups, manage members, admins, permissions and notifications on Nexora.",
       },
-      { property: "og:title", content: "Groups — Aura Connect" },
+      { property: "og:title", content: "Groups — Nexora" },
       { property: "og:description", content: "Create groups and manage members, admins and permissions." },
     ],
   }),

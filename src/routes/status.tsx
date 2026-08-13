@@ -26,12 +26,12 @@ import { uploadService } from "@/services/uploadService";
 export const Route = createFileRoute("/status")({
   head: () => ({
     meta: [
-      { title: "Status — Aura Connect" },
+      { title: "Status — Nexora" },
       {
         name: "description",
-        content: "Post text or media status updates on Aura Connect and see who viewed them.",
+        content: "Post text or media status updates on Nexora and see who viewed them.",
       },
-      { property: "og:title", content: "Status — Aura Connect" },
+      { property: "og:title", content: "Status — Nexora" },
       { property: "og:description", content: "Post status updates and track views across your team." },
     ],
   }),

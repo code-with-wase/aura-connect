@@ -30,13 +30,13 @@ import { userService } from "@/services/userService";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Inbox — Aura Connect" },
+      { title: "Inbox — Nexora" },
       {
         name: "description",
         content:
-          "Aura Connect inbox: real-time direct messages, group chats, attachments, reactions and calls.",
+          "Nexora inbox: real-time direct messages, group chats, attachments, reactions and calls.",
       },
-      { property: "og:title", content: "Inbox — Aura Connect" },
+      { property: "og:title", content: "Inbox — Nexora" },
       {
         property: "og:description",
         content: "Real-time direct messages, group chats, attachments, reactions and calls.",
