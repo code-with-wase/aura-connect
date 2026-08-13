@@ -90,14 +90,76 @@ axiosInstance.interceptors.response.use(
   },
 );
 
+const GENERIC_SERVER_MESSAGES = new Set([
+  "internal server error",
+  "something went wrong",
+  "error",
+  "",
+]);
+
+/** Maps unhelpful backend responses to clear, human messages. */
+function friendlyMessage(status: number | undefined, url: string, method: string): string | null {
+  const isLogin = url.includes("/auth/login");
+  const isRegister = url.includes("/auth/register");
+  const isAddContact = url.includes("/contact/") && method === "post";
+
+  if (isLogin && (status === 400 || status === 401 || status === 404 || status === 500)) {
+    return "Wrong password or account not found. Please check your details and try again.";
+  }
+  if (isRegister && (status === 409 || status === 400 || status === 500)) {
+    return "This email, username or phone number is already registered.";
+  }
+  if (isAddContact && status === 500) return "This person is already in your contacts.";
+
+  switch (status) {
+    case 400:
+      return "Some details are invalid. Please review and try again.";
+    case 401:
+      return "Your session expired. Please sign in again.";
+    case 403:
+      return "You do not have permission to do that.";
+    case 404:
+      return "We could not find what you were looking for.";
+    case 409:
+      return "That already exists.";
+    case 413:
+      return "That file is too large.";
+    case 429:
+      return "Too many attempts. Please wait a moment and try again.";
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      return "The server is not responding right now. Please try again shortly.";
+    default:
+      return null;
+  }
+}
+
 export function getApiErrorMessage(error: unknown, fallback = "Something went wrong"): string {
   if (axios.isAxiosError(error)) {
-    const data = error.response?.data as
-      | { message?: string; errors?: Array<{ message?: string }> | Record<string, string> }
+    if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
+      return "The request timed out. Please check your connection and try again.";
+    }
+    if (!error.response) {
+      return "No internet connection. Please check your network and try again.";
+    }
+
+    const data = error.response.data as
+      | { message?: string; errors?: Array<{ field?: string; message?: string }> | Record<string, string> }
       | undefined;
+    const status = error.response.status;
+    const url = error.config?.url ?? "";
+    const method = (error.config?.method ?? "get").toLowerCase();
+
     if (Array.isArray(data?.errors) && data.errors[0]?.message) return data.errors[0].message!;
-    if (data?.message) return data.message;
-    return error.message || fallback;
+
+    const serverMessage = typeof data?.message === "string" ? data.message.trim() : "";
+    if (serverMessage && !GENERIC_SERVER_MESSAGES.has(serverMessage.toLowerCase())) {
+      return serverMessage;
+    }
+
+    return friendlyMessage(status, url, method) ?? fallback;
   }
   if (error instanceof Error) return error.message;
   return fallback;
