@@ -25,6 +25,7 @@ import { toast } from "sonner";
 
 import { EmptyState, ErrorState, LoadingState } from "@/components/aura/states";
 import { UserAvatar } from "@/components/aura/user-avatar";
+import { WallpaperPicker, useChatWallpaper } from "@/components/aura/wallpaper-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
