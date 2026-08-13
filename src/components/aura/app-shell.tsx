@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useAuth } from "@/context/auth-context";
 import { cn } from "@/lib/utils";
 import { notificationService } from "@/services/notificationService";
+import { NexoraMark } from "@/components/aura/brand";
 
 const NAV = [
   { to: "/", label: "Chats", icon: MessageSquare },
@@ -77,10 +78,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <nav className="hidden w-16 shrink-0 flex-col items-center gap-1 border-r border-border bg-surface py-4 md:flex">
-        <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-md bg-accent text-sm font-bold text-accent-foreground">
-          A
-        </div>
+      <nav className="hidden w-[68px] shrink-0 flex-col items-center gap-1.5 border-r border-border bg-surface py-4 md:flex">
+        <NexoraMark className="mb-4 h-10 w-10" />
         {NAV.map((item) => {
           const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
           return (
@@ -89,14 +88,18 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Link
                   to={item.to}
                   className={cn(
-                    "relative flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground",
-                    active && "bg-accent/10 text-accent",
+                    "relative flex h-11 w-11 items-center justify-center rounded-xl text-muted-foreground transition-all duration-200 hover:bg-surface-hover hover:text-foreground",
+                    active &&
+                      "bg-accent/10 text-accent shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--accent)_25%,transparent)]",
                   )}
                   aria-label={item.label}
                 >
+                  {active && (
+                    <span className="absolute -left-[14px] h-6 w-[3px] rounded-full bg-accent" />
+                  )}
                   <item.icon className="h-5 w-5" />
                   {item.to === "/notifications" && unread > 0 && (
-                    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive" />
+                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive ring-2 ring-surface" />
                   )}
                 </Link>
               </TooltipTrigger>
@@ -104,7 +107,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Tooltip>
           );
         })}
-        <div className="mt-auto flex flex-col items-center gap-1">
+        <div className="mt-auto flex flex-col items-center gap-1 border-t border-border pt-3">
           <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme">
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
@@ -116,7 +119,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col pb-14 md:pb-0">{children}</div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between border-t border-border bg-surface px-2 py-1 md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between border-t border-border bg-surface/95 px-1 py-1 backdrop-blur md:hidden">
         {NAV.map((item) => {
           const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
           return (
@@ -124,8 +127,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               key={item.to}
               to={item.to}
               className={cn(
-                "flex flex-1 flex-col items-center gap-0.5 rounded-md py-1.5 text-[10px] text-muted-foreground",
-                active && "text-accent",
+                "flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[10px] font-medium text-muted-foreground transition-colors",
+                active && "bg-accent/10 text-accent",
               )}
             >
               <item.icon className="h-4 w-4" />
@@ -148,10 +151,10 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface px-4 py-4 md:px-6">
+    <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface/90 px-4 py-4 backdrop-blur md:px-6">
       <div>
-        <h1 className="text-lg font-semibold text-foreground">{title}</h1>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+        <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
+        {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
       </div>
       {action}
     </header>
