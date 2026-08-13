@@ -80,6 +80,8 @@ export function ChatWindow({
 }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [wallpaperOpen, setWallpaperOpen] = useState(false);
+  const { wallpaper } = useChatWallpaper(chat._id);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
