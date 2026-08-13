@@ -18,6 +18,7 @@ import {
   Star,
   Trash2,
   Video,
+  Wallpaper as WallpaperIcon,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -25,6 +26,7 @@ import { toast } from "sonner";
 
 import { EmptyState, ErrorState, LoadingState } from "@/components/aura/states";
 import { UserAvatar } from "@/components/aura/user-avatar";
+import { WallpaperPicker, useChatWallpaper } from "@/components/aura/wallpaper-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -78,6 +80,8 @@ export function ChatWindow({
 }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [wallpaperOpen, setWallpaperOpen] = useState(false);
+  const { wallpaper } = useChatWallpaper(chat._id);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -366,6 +370,10 @@ export function ChatWindow({
               <Pin className="mr-2 h-4 w-4" />
               {isPinned ? "Unpin" : "Pin"}
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setWallpaperOpen(true)}>
+              <WallpaperIcon className="mr-2 h-4 w-4" />
+              Change wallpaper
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => void updateChatSetting({ isArchived: true })}>
               Archive conversation
             </DropdownMenuItem>
@@ -407,7 +415,9 @@ export function ChatWindow({
         </DropdownMenu>
       </header>
 
-      <ScrollArea className="min-h-0 flex-1">
+      <WallpaperPicker open={wallpaperOpen} onOpenChange={setWallpaperOpen} chatId={chat._id} />
+
+      <ScrollArea className="min-h-0 flex-1" style={wallpaper.style}>
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-3 py-5 md:px-6">
           {loading && <LoadingState label="Loading messages…" />}
           {!loading && error && <ErrorState message={error} onRetry={() => void load()} />}
