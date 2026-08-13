@@ -68,15 +68,18 @@ export function AppShell({ children }: { children: ReactNode }) {
       .catch(() => setUnread(0));
   }, [user, pathname]);
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          <p className="text-sm text-muted-foreground">
+            {!user ? "Redirecting to sign in…" : "Loading your workspace…"}
+          </p>
+        </div>
       </div>
     );
   }
-
-  if (!user) return null;
 
   return (
     <div className="flex min-h-screen bg-background">
