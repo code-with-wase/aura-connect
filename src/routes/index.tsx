@@ -1,185 +1,287 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { MessageCircle, CircleDashed, Users, User, Moon, Sun } from "lucide-react";
+import { Loader2, MessageSquarePlus, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { ChatList } from "@/components/nexora/chat-list";
-import { ChatView } from "@/components/nexora/chat-view";
-import { DetailsPanel, ProfilePanel, StatusPanel } from "@/components/nexora/panels";
-import { Welcome } from "@/components/nexora/welcome";
-import { NexoraMark } from "@/components/nexora/logo";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { conversations } from "@/lib/nexora-data";
+import { AppShell } from "@/components/aura/app-shell";
+import { ChatWindow } from "@/components/aura/chat-window";
+import { EmptyState, ErrorState, LoadingState } from "@/components/aura/states";
+import { UserAvatar } from "@/components/aura/user-avatar";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useAuth } from "@/context/auth-context";
+import type { Chat, User } from "@/lib/api-types";
+import { getApiErrorMessage } from "@/lib/axios";
+import { chatAvatar, chatTitle, formatTime, messagePreview, otherParticipant } from "@/lib/chat-utils";
+import { getSocket } from "@/lib/socket";
 import { cn } from "@/lib/utils";
+import { chatService } from "@/services/chatService";
+import { userService } from "@/services/userService";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Nexora — Your conversations, beautifully connected" },
+      { title: "Inbox — Aura Connect" },
       {
         name: "description",
         content:
-          "Nexora is a premium messaging workspace with a calm chat canvas, threaded replies, reactions and status updates.",
+          "Aura Connect inbox: real-time direct messages, group chats, attachments, reactions and calls.",
       },
-      { property: "og:title", content: "Nexora — Messaging, refined" },
+      { property: "og:title", content: "Inbox — Aura Connect" },
       {
         property: "og:description",
-        content:
-          "A premium messaging experience: calm chat canvas, threaded replies, reactions and status.",
+        content: "Real-time direct messages, group chats, attachments, reactions and calls.",
       },
     ],
   }),
-  component: Index,
+  component: InboxPage,
 });
 
-type Tab = "chats" | "status" | "groups" | "profile";
+function InboxPage() {
+  return (
+    <AppShell>
+      <Inbox />
+    </AppShell>
+  );
+}
 
-const tabs: { id: Tab; label: string; icon: typeof MessageCircle }[] = [
-  { id: "chats", label: "Chats", icon: MessageCircle },
-  { id: "status", label: "Status", icon: CircleDashed },
-  { id: "groups", label: "Groups", icon: Users },
-  { id: "profile", label: "Profile", icon: User },
-];
+function Inbox() {
+  const { user } = useAuth();
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [activeId, setActiveId] = useState<string | null>(null);
 
-function Index() {
-  const [tab, setTab] = useState<Tab>("chats");
-  const [activeId, setActiveId] = useState<string | null>("aria");
-  const [mobileChatOpen, setMobileChatOpen] = useState(false);
-  const [infoOpen, setInfoOpen] = useState(true);
-  const [dark, setDark] = useState(false);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setChats(await chatService.list());
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Unable to load conversations"));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-  }, [dark]);
+    void load();
+  }, [load]);
 
-  const active = conversations.find((c) => c.id === activeId) ?? null;
-  const listItems =
-    tab === "groups" ? conversations.filter((c) => c.kind === "group") : conversations;
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+    const refresh = () => void load();
+    socket.on("message:new", refresh);
+    socket.on("presence:updated", refresh);
+    return () => {
+      socket.off("message:new", refresh);
+      socket.off("presence:updated", refresh);
+    };
+  }, [load]);
 
-  function newChat() {
-    toast("New conversation", { description: "Pick a contact to start messaging on Nexora." });
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    const sorted = [...chats].sort(
+      (a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime(),
+    );
+    if (!term) return sorted;
+    return sorted.filter((chat) => chatTitle(chat, user?._id).toLowerCase().includes(term));
+  }, [chats, query, user?._id]);
+
+  const active = chats.find((chat) => chat._id === activeId) ?? null;
+
+  return (
+    <div className="flex min-h-0 flex-1">
+      <aside
+        className={cn(
+          "flex w-full min-w-0 flex-col border-r border-border bg-surface md:w-80 lg:w-96",
+          active && "hidden md:flex",
+        )}
+      >
+        <div className="space-y-3 border-b border-border px-4 py-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-semibold text-foreground">Chats</h1>
+            <NewChatDialog
+              onCreated={(chat) => {
+                setChats((prev) => (prev.some((c) => c._id === chat._id) ? prev : [chat, ...prev]));
+                setActiveId(chat._id);
+              }}
+            />
+          </div>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search conversations"
+              className="pl-9"
+              aria-label="Search conversations"
+            />
+          </div>
+        </div>
+
+        <ScrollArea className="min-h-0 flex-1">
+          {loading && <LoadingState label="Loading conversations…" />}
+          {!loading && error && <ErrorState message={error} onRetry={() => void load()} />}
+          {!loading && !error && filtered.length === 0 && (
+            <EmptyState
+              title="No conversations"
+              description="Start a new chat to begin messaging your team."
+            />
+          )}
+          {!loading &&
+            !error &&
+            filtered.map((chat) => {
+              const partner = otherParticipant(chat, user?._id);
+              return (
+                <button
+                  key={chat._id}
+                  type="button"
+                  onClick={() => setActiveId(chat._id)}
+                  className={cn(
+                    "flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-surface-hover",
+                    activeId === chat._id && "bg-accent/8",
+                  )}
+                >
+                  <UserAvatar
+                    name={chatTitle(chat, user?._id)}
+                    src={chatAvatar(chat, user?._id)}
+                    online={partner?.isOnline}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {chatTitle(chat, user?._id)}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                        {formatTime(chat.lastMessage?.createdAt ?? chat.updatedAt)}
+                      </span>
+                    </span>
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-xs text-muted-foreground">
+                        {messagePreview(chat.lastMessage)}
+                      </span>
+                      {(chat.unreadCount ?? 0) > 0 && (
+                        <span className="rounded-full bg-accent px-1.5 text-[10px] font-semibold text-accent-foreground">
+                          {chat.unreadCount}
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+        </ScrollArea>
+      </aside>
+
+      {active ? (
+        <ChatWindow
+          key={active._id}
+          chat={active}
+          chats={chats}
+          onBack={() => setActiveId(null)}
+          onChatsChanged={() => void load()}
+        />
+      ) : (
+        <section className="hidden flex-1 items-center justify-center bg-background md:flex">
+          <div className="max-w-sm text-center">
+            <h2 className="text-lg font-semibold text-foreground">Select a conversation</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Choose a chat from the list or start a new conversation to begin messaging.
+            </p>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function NewChatDialog({ onCreated }: { onCreated: (chat: Chat) => void }) {
+  const [open, setOpen] = useState(false);
+  const [term, setTerm] = useState("");
+  const [results, setResults] = useState<User[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [creatingId, setCreatingId] = useState<string | null>(null);
+
+  async function search(event: React.FormEvent) {
+    event.preventDefault();
+    if (!term.trim()) return;
+    setSearching(true);
+    try {
+      setResults(await userService.search(term.trim()));
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Search failed"));
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function startChat(userId: string) {
+    setCreatingId(userId);
+    try {
+      const chat = await chatService.createPrivate(userId);
+      onCreated(chat);
+      setOpen(false);
+      setTerm("");
+      setResults([]);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, "Could not start chat"));
+    } finally {
+      setCreatingId(null);
+    }
   }
 
   return (
-    <main className="flex h-screen overflow-hidden bg-background text-foreground">
-      <nav
-        aria-label="Primary"
-        className="hidden w-[4.5rem] shrink-0 flex-col items-center gap-2 border-r border-border bg-sidebar py-5 lg:flex"
-      >
-        <NexoraMark className="mb-4 h-10 w-10" />
-        {tabs.map((t) => (
-          <Tooltip key={t.id}>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setTab(t.id)}
-                aria-label={t.label}
-                aria-current={tab === t.id ? "page" : undefined}
-                className={cn(
-                  "relative grid h-11 w-11 place-items-center rounded-2xl transition-all duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                  tab === t.id
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-surface-hover hover:text-foreground",
-                )}
-              >
-                <t.icon className="h-[1.15rem] w-[1.15rem]" />
-                {tab === t.id ? (
-                  <span
-                    aria-hidden="true"
-                    className="absolute -left-[1.05rem] h-6 w-[3px] rounded-full bg-brand"
-                  />
-                ) : null}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{t.label}</TooltipContent>
-          </Tooltip>
-        ))}
-        <div className="mt-auto">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setDark((v) => !v)}
-                aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
-                className="grid h-11 w-11 place-items-center rounded-2xl text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
-              >
-                {dark ? (
-                  <Sun className="h-[1.15rem] w-[1.15rem]" />
-                ) : (
-                  <Moon className="h-[1.15rem] w-[1.15rem]" />
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{dark ? "Light theme" : "Dark theme"}</TooltipContent>
-          </Tooltip>
-        </div>
-      </nav>
-
-      <div
-        className={cn(
-          "relative min-h-0 w-full shrink-0 flex-col border-r border-border lg:flex lg:w-[22rem]",
-          mobileChatOpen ? "hidden lg:flex" : "flex",
-        )}
-      >
-        <div className="relative min-h-0 flex-1">
-          {tab === "status" ? (
-            <StatusPanel />
-          ) : tab === "profile" ? (
-            <ProfilePanel />
-          ) : (
-            <ChatList
-              items={listItems}
-              activeId={activeId}
-              onSelect={(id) => {
-                setActiveId(id);
-                setMobileChatOpen(true);
-              }}
-              onNewChat={newChat}
-              onOpenProfile={() => setTab("profile")}
-            />
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          <MessageSquarePlus className="mr-2 h-4 w-4" />
+          New
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New conversation</DialogTitle>
+          <DialogDescription>Search for a colleague by name, username, email or phone.</DialogDescription>
+        </DialogHeader>
+        <form className="flex gap-2" onSubmit={search}>
+          <Input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search people" />
+          <Button type="submit" disabled={searching || !term.trim()}>
+            {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
+          </Button>
+        </form>
+        <div className="max-h-64 space-y-1 overflow-y-auto">
+          {results.map((person) => (
+            <div
+              key={person._id}
+              className="flex items-center gap-3 rounded-md border border-border px-3 py-2"
+            >
+              <UserAvatar name={person.name} src={person.avatar} size={32} online={person.isOnline} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{person.name}</p>
+                <p className="truncate text-xs text-muted-foreground">@{person.username}</p>
+              </div>
+              <Button size="sm" disabled={creatingId === person._id} onClick={() => void startChat(person._id)}>
+                {creatingId === person._id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Chat"}
+              </Button>
+            </div>
+          ))}
+          {!searching && results.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted-foreground">No results yet.</p>
           )}
         </div>
-
-        <nav
-          aria-label="Sections"
-          className="nx-glass flex items-center justify-around border-x-0 border-b-0 px-2 py-2 lg:hidden"
-        >
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              aria-current={tab === t.id ? "page" : undefined}
-              className={cn(
-                "flex min-h-11 min-w-11 flex-1 flex-col items-center gap-1 rounded-xl py-1.5 text-[0.65rem] font-semibold transition-colors",
-                tab === t.id ? "text-brand" : "text-muted-foreground",
-              )}
-            >
-              <t.icon className="h-5 w-5" />
-              {t.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      <div
-        className={cn("min-h-0 min-w-0 flex-1", mobileChatOpen ? "flex" : "hidden lg:flex")}
-      >
-        {active ? (
-          <>
-            <div className="min-w-0 flex-1">
-              <ChatView
-                conversation={active}
-                onBack={() => setMobileChatOpen(false)}
-                infoOpen={infoOpen}
-                onToggleInfo={() => setInfoOpen((v) => !v)}
-              />
-            </div>
-            {infoOpen ? <DetailsPanel conversation={active} /> : null}
-          </>
-        ) : (
-          <div className="flex-1">
-            <Welcome onNewChat={newChat} />
-          </div>
-        )}
-      </div>
-    </main>
+      </DialogContent>
+    </Dialog>
   );
 }
