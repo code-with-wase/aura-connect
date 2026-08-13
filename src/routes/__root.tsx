@@ -115,11 +115,26 @@ export const Route = createRootRoute({
   errorComponent: ErrorComponent,
 });
 
+const THEME_SCRIPT = `
+  (function () {
+    try {
+      const key = 'nexora-theme-mode';
+      let mode = window.localStorage.getItem(key);
+      if (mode !== 'dark' && mode !== 'light') {
+        mode = 'dark';
+        window.localStorage.setItem(key, mode);
+      }
+      document.documentElement.classList.toggle('dark', mode === 'dark');
+    } catch (e) {}
+  })();
+`;
+
 function RootShell({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="dark">
       <head>
         <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body>
         {children}
