@@ -173,3 +173,45 @@
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
+
+@utility nx-brand-gradient {
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--accent) 92%, black) 0%,
+    var(--accent) 55%,
+    color-mix(in oklab, var(--accent) 70%, var(--chart-2)) 100%
+  );
+}
+
+@utility nx-elevate {
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--foreground) 6%, transparent),
+    0 12px 32px -18px color-mix(in oklab, var(--foreground) 22%, transparent);
+}
+
+@utility nx-ring-focus {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+}
+
+@utility nx-grid-bg {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--border) 60%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--border) 60%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@keyframes nx-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility nx-rise {
+  animation: nx-rise 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

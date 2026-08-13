@@ -16,12 +16,12 @@ import { notificationService } from "@/services/notificationService";
 export const Route = createFileRoute("/notifications")({
   head: () => ({
     meta: [
-      { title: "Notifications — Aura Connect" },
+      { title: "Notifications — Nexora" },
       {
         name: "description",
-        content: "Review and manage all Aura Connect notifications for messages, groups and calls.",
+        content: "Review and manage all Nexora notifications for messages, groups and calls.",
       },
-      { property: "og:title", content: "Notifications — Aura Connect" },
+      { property: "og:title", content: "Notifications — Nexora" },
       { property: "og:description", content: "Manage notifications for messages, groups and calls." },
     ],
   }),
