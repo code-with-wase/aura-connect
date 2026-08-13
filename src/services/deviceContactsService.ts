@@ -1,4 +1,4 @@
-import { Contacts, type Permission } from "@capacitor/contacts";
+import { Contacts } from "@capacitor-community/contacts"; 
 import { normalizePhoneNumber } from "@/lib/phone-utils";
 
 export interface DeviceContact {
