@@ -43,6 +43,8 @@ function SettingsPage() {
   const [profile, setProfile] = useState({ name: "", username: "", about: "" });
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPrivacy, setSavingPrivacy] = useState(false);
+  const [wallpaperOpen, setWallpaperOpen] = useState(false);
+  const { wallpaper: defaultWallpaper } = useChatWallpaper();
 
   useEffect(() => {
     if (user) {
