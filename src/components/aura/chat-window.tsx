@@ -18,6 +18,7 @@ import {
   Star,
   Trash2,
   Video,
+  Wallpaper as WallpaperIcon,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -367,6 +368,10 @@ export function ChatWindow({
               <Pin className="mr-2 h-4 w-4" />
               {isPinned ? "Unpin" : "Pin"}
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setWallpaperOpen(true)}>
+              <WallpaperIcon className="mr-2 h-4 w-4" />
+              Change wallpaper
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => void updateChatSetting({ isArchived: true })}>
               Archive conversation
             </DropdownMenuItem>
@@ -408,7 +413,9 @@ export function ChatWindow({
         </DropdownMenu>
       </header>
 
-      <ScrollArea className="min-h-0 flex-1">
+      <WallpaperPicker open={wallpaperOpen} onOpenChange={setWallpaperOpen} chatId={chat._id} />
+
+      <ScrollArea className="min-h-0 flex-1" style={wallpaper.style}>
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-3 py-5 md:px-6">
           {loading && <LoadingState label="Loading messages…" />}
           {!loading && error && <ErrorState message={error} onRetry={() => void load()} />}
