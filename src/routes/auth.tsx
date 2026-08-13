@@ -77,19 +77,55 @@ function AuthPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-md">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-accent text-accent-foreground">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Nexora</h1>
-            <p className="text-sm text-muted-foreground">Secure messaging for modern teams</p>
-          </div>
+    <main className="grid min-h-screen bg-background lg:grid-cols-[1.05fr_1fr]">
+      <section className="nx-brand-gradient relative hidden flex-col justify-between overflow-hidden p-12 lg:flex">
+        <div className="nx-grid-bg absolute inset-0 opacity-15" aria-hidden />
+        <div className="relative flex items-center gap-3">
+          <NexoraMark className="h-10 w-10 bg-white/15 shadow-none" />
+          <NexoraWordmark className="text-accent-foreground" />
         </div>
+        <div className="relative max-w-md text-accent-foreground">
+          <h2 className="text-3xl font-semibold leading-tight tracking-tight">
+            Enterprise messaging, built for focused teams.
+          </h2>
+          <p className="mt-3 text-sm text-accent-foreground/80">
+            Real-time chats, groups, calls and status updates in one secure workspace.
+          </p>
+          <ul className="mt-8 space-y-3 text-sm text-accent-foreground/90">
+            <li className="flex items-center gap-3">
+              <MessagesSquare className="h-4 w-4" /> Instant direct and group messaging
+            </li>
+            <li className="flex items-center gap-3">
+              <Users2 className="h-4 w-4" /> Roles, permissions and member controls
+            </li>
+            <li className="flex items-center gap-3">
+              <Lock className="h-4 w-4" /> Privacy controls and blocked-user management
+            </li>
+          </ul>
+        </div>
+        <p className="relative text-xs text-accent-foreground/70">
+          &copy; {new Date().getFullYear()} Nexora
+        </p>
+      </section>
 
-        <div className="rounded-lg border border-border bg-surface p-6 shadow-sm">
+      <section className="flex items-center justify-center px-4 py-12 sm:px-8">
+        <div className="nx-rise w-full max-w-md">
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <NexoraMark className="h-10 w-10" />
+            <div>
+              <NexoraWordmark />
+              <p className="text-sm text-muted-foreground">Secure messaging for modern teams</p>
+            </div>
+          </div>
+
+          <div className="mb-6 hidden lg:block">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Welcome back</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Sign in to your Nexora workspace to continue.
+            </p>
+          </div>
+
+          <div className="nx-elevate rounded-2xl border border-border bg-surface p-6 sm:p-7">
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Sign in</TabsTrigger>
@@ -190,8 +226,12 @@ function AuthPage() {
               </form>
             </TabsContent>
           </Tabs>
+          </div>
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            Protected workspace. By continuing you agree to Nexora&apos;s acceptable use policy.
+          </p>
         </div>
-      </div>
+      </section>
     </main>
   );
 }
