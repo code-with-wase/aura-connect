@@ -8,10 +8,10 @@ export function NxAvatar({
   className,
 }: {
   initials: string;
-  accent?: string;
-  online?: boolean;
-  size?: "sm" | "md" | "lg" | "xl";
-  className?: string;
+  accent?: string | undefined;
+  online?: boolean | undefined;
+  size?: "sm" | "md" | "lg" | "xl" | undefined;
+  className?: string | undefined;
 }) {
   const sizes = {
     sm: "h-8 w-8 text-[0.65rem]",
