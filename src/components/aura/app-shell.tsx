@@ -31,10 +31,10 @@ const NAV = [
 ] as const;
 
 function useTheme() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
   useEffect(() => {
     const stored = window.localStorage.getItem("nexora-theme");
-    const isDark = stored === "dark";
+    const isDark = stored ? stored === "dark" : true;
     setDark(isDark);
     document.documentElement.classList.toggle("dark", isDark);
   }, []);
