@@ -9,54 +9,58 @@ import { App } from '@capacitor/app'
 import { StatusBar } from '@capacitor/status-bar'
 import { SplashScreen } from '@capacitor/splash-screen'
 
-// Initialize the app
+const isNativeApp = Boolean((window as any)?.Capacitor?.isNativePlatform?.())
+
 const initializeApp = async () => {
   try {
-    // Keep splash screen visible
-    await SplashScreen.show({
-      showDuration: 0,
-    })
+    if (isNativeApp) {
+      await SplashScreen.show({ showDuration: 0 })
+      await StatusBar.setStyle({ style: 'dark' })
 
-    // Set status bar style
-    await StatusBar.setStyle({ style: 'dark' })
+      if (typeof App?.addListener === 'function') {
+        App.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) {
+            console.log('App is active')
+          } else {
+            console.log('App is in background')
+          }
+        })
 
-    // Listen for app lifecycle
-    App.addListener('appStateChange', ({ isActive }) => {
-      if (isActive) {
-        // App has been brought to the foreground
-        console.log('App is active')
-      } else {
-        // App has been put in the background
-        console.log('App is in background')
+        App.addListener('backButtonPressed', () => {
+          if (window.history.length > 1) {
+            window.history.back()
+          } else {
+            window.close?.()
+          }
+        })
       }
-    })
-
-    // Listen for back button press
-    App.addListener('backButtonPressed', () => {
-      // Use browser's back navigation
-      window.history.back()
-    })
-
-    // Hide splash screen after app is ready
-    await SplashScreen.hide()
+    }
   } catch (error) {
     console.error('Error initializing app:', error)
+  } finally {
+    try {
+      if (isNativeApp && typeof SplashScreen?.hide === 'function') {
+        await SplashScreen.hide()
+      }
+    } catch (error) {
+      console.error('Error hiding splash screen:', error)
+    }
   }
 }
 
-// Initialize the app
-initializeApp()
+void initializeApp()
 
-// Create and render the router
 const router = getRouter()
-
 const rootElement = document.getElementById('root')
 
-if (!rootElement?.innerHTML) {
-  const root = ReactDOM.createRoot(rootElement!)
+if (rootElement) {
+  rootElement.innerHTML = ''
+  const root = ReactDOM.createRoot(rootElement)
   root.render(
     <React.StrictMode>
       <RouterProvider router={router} />
     </React.StrictMode>,
   )
+} else {
+  console.error('Root element not found; app could not mount.')
 }
