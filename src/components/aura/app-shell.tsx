@@ -145,9 +145,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <item.icon className={cn("h-[22px] w-[22px]", active && "text-accent")} strokeWidth={active ? 2.4 : 1.9} />
               {item.label}
-              {item.to === "/settings" && unread > 0 && (
-                <span className="absolute" aria-hidden />
-              )}
             </Link>
           );
         })}
