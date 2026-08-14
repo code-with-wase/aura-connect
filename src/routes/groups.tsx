@@ -1,10 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import {
   ArrowDownCircle,
   ArrowUpCircle,
   BellOff,
   Loader2,
   LogOut,
+  MessageSquare,
   Plus,
   Settings2,
   UserMinus,
@@ -45,7 +46,10 @@ export const Route = createFileRoute("/groups")({
         content: "Create groups, manage members, admins, permissions and notifications on Nexora.",
       },
       { property: "og:title", content: "Groups — Nexora" },
-      { property: "og:description", content: "Create groups and manage members, admins and permissions." },
+      {
+        property: "og:description",
+        content: "Create groups and manage members, admins and permissions.",
+      },
     ],
   }),
   component: () => (
@@ -114,7 +118,10 @@ function GroupsPage() {
           {loading && <LoadingState />}
           {!loading && error && <ErrorState message={error} onRetry={() => void load()} />}
           {!loading && !error && groups.length === 0 && (
-            <EmptyState title="No groups yet" description="Create a group to collaborate with your team." />
+            <EmptyState
+              title="No groups yet"
+              description="Create a group to collaborate with your team."
+            />
           )}
           {!loading &&
             !error &&
@@ -130,7 +137,9 @@ function GroupsPage() {
               >
                 <UserAvatar name={group.name} src={group.avatar} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-foreground">{group.name}</span>
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    {group.name}
+                  </span>
                   <span className="block truncate text-xs text-muted-foreground">
                     {group.members?.length ?? 0} members
                   </span>
@@ -199,7 +208,10 @@ function GroupDetails({
             onClick={() => {
               const next = !muted;
               setMuted(next);
-              void onRun(() => groupService.mute(group._id, next), next ? "Group muted" : "Group unmuted");
+              void onRun(
+                () => groupService.mute(group._id, next),
+                next ? "Group muted" : "Group unmuted",
+              );
             }}
           >
             <BellOff className="mr-2 h-4 w-4" />
@@ -230,7 +242,12 @@ function GroupDetails({
         >
           <div className="space-y-2">
             <Label htmlFor="group-name">Group name</Label>
-            <Input id="group-name" value={name} minLength={2} onChange={(e) => setName(e.target.value)} />
+            <Input
+              id="group-name"
+              value={name}
+              minLength={2}
+              onChange={(e) => setName(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="group-description">Description</Label>
@@ -248,11 +265,14 @@ function GroupDetails({
         </form>
       )}
 
-      <p className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted-foreground">
-        Group messaging is not exposed by the backend yet: the group API does not create a chat thread
-        (<code>POST /chat</code> only creates private chats), so messages cannot be posted to a group until the
-        backend links groups to a chat. Group creation, members, admins and permissions below are fully live.
-      </p>
+      {group.chatId && (
+        <Button size="sm" asChild>
+          <Link to="/" search={{ chat: group.chatId }}>
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Open group chat
+          </Link>
+        </Button>
+      )}
 
       {canManage && (
         <section className="space-y-3 rounded-md border border-border p-4">
@@ -290,7 +310,9 @@ function GroupDetails({
 
       <section className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-foreground">Members ({group.members?.length ?? 0})</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            Members ({group.members?.length ?? 0})
+          </h3>
           {canManage && <AddMembersDialog groupId={group._id} onDone={onRun} busy={busy} />}
         </div>
         {(group.members ?? []).map((member) => {
@@ -300,7 +322,12 @@ function GroupDetails({
               key={member.user?._id}
               className="flex items-center gap-3 rounded-md border border-border px-3 py-2"
             >
-              <UserAvatar name={member.user?.name} src={member.user?.avatar} size={32} online={member.user?.isOnline} />
+              <UserAvatar
+                name={member.user?.name}
+                src={member.user?.avatar}
+                size={32}
+                online={member.user?.isOnline}
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">
                   {member.user?.name}
@@ -398,14 +425,21 @@ function AddMembersDialog({
           <DialogDescription>Search people and add them to this group.</DialogDescription>
         </DialogHeader>
         <form className="flex gap-2" onSubmit={search}>
-          <Input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search people" />
+          <Input
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            placeholder="Search people"
+          />
           <Button type="submit" disabled={searching || !term.trim()}>
             {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
           </Button>
         </form>
         <div className="max-h-64 space-y-1 overflow-y-auto">
           {results.map((person) => (
-            <div key={person._id} className="flex items-center gap-3 rounded-md border border-border px-3 py-2">
+            <div
+              key={person._id}
+              className="flex items-center gap-3 rounded-md border border-border px-3 py-2"
+            >
               <UserAvatar name={person.name} src={person.avatar} size={32} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{person.name}</p>
@@ -415,7 +449,10 @@ function AddMembersDialog({
                 size="sm"
                 disabled={busy}
                 onClick={async () => {
-                  await onDone(() => groupService.addMembers(groupId, [person._id]), "Member added");
+                  await onDone(
+                    () => groupService.addMembers(groupId, [person._id]),
+                    "Member added",
+                  );
                   setOpen(false);
                 }}
               >
@@ -510,7 +547,11 @@ function CreateGroupDialog({ onCreated }: { onCreated: () => void }) {
           <div className="space-y-2">
             <Label>Members</Label>
             <div className="flex gap-2">
-              <Input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search people" />
+              <Input
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+                placeholder="Search people"
+              />
               <Button type="button" variant="outline" onClick={search}>
                 Search
               </Button>

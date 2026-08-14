@@ -18,6 +18,7 @@ import {
   SmilePlus,
   Star,
   Trash2,
+  Users,
   Video,
   Wallpaper as WallpaperIcon,
   X,
@@ -26,6 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { EmptyState, ErrorState, LoadingState } from "@/components/aura/states";
+import { GroupInfoPanel, activeMembers, canSendToGroup } from "@/components/aura/group-info-panel";
 import { UserAvatar } from "@/components/aura/user-avatar";
 import { WallpaperPicker, useChatWallpaper } from "@/components/aura/wallpaper-picker";
 import { Button } from "@/components/ui/button";
@@ -47,10 +49,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/context/auth-context";
-import type { Chat, Message, User } from "@/lib/api-types";
+import type { Chat, Group, Message, User } from "@/lib/api-types";
 import { getApiErrorMessage } from "@/lib/axios";
 import {
   chatAvatar,
+  chatGroupId,
   chatMembers,
   chatTitle,
   formatTime,
@@ -62,11 +65,13 @@ import {
   senderName,
 } from "@/lib/chat-utils";
 import { downloadFile, formatFileSize } from "@/lib/media";
+import { usePresence } from "@/lib/presence-store";
 import { getSocket } from "@/lib/socket";
 import { cn } from "@/lib/utils";
 import { callService } from "@/services/callService";
 import { chatService } from "@/services/chatService";
 import { contactService } from "@/services/contactService";
+import { groupService } from "@/services/groupService";
 import { messageService } from "@/services/messageService";
 import { uploadService } from "@/services/uploadService";
 import { userService } from "@/services/userService";
@@ -76,7 +81,8 @@ const POLL_MS = 6000;
 
 /** Single check = sent, double = delivered, blue double = read. */
 function MessageTicks({ message }: { message: Message }) {
-  const status = message.status ?? (message.readAt ? "read" : message.deliveredAt ? "delivered" : "sent");
+  const status =
+    message.status ?? (message.readAt ? "read" : message.deliveredAt ? "delivered" : "sent");
   if (status === "sending") return <Loader2 className="h-3 w-3 animate-spin" />;
   if (status === "read") return <CheckCheck className="h-3 w-3 text-accent" aria-label="Read" />;
   if (status === "delivered") return <CheckCheck className="h-3 w-3" aria-label="Delivered" />;
@@ -167,7 +173,9 @@ function MessageAttachment({
 }
 
 function sortMessages(list: Message[]) {
-  return [...list].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  return [...list].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  );
 }
 
 export function ChatWindow({
@@ -195,6 +203,8 @@ export function ChatWindow({
   const [forwarding, setForwarding] = useState<Message | null>(null);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   const [partnerLive, setPartnerLive] = useState<User | null>(null);
+  const [group, setGroup] = useState<Group | null>(null);
+  const [groupInfoOpen, setGroupInfoOpen] = useState(false);
   const [preview, setPreview] = useState<Message | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -204,8 +214,11 @@ export function ChatWindow({
   chatsChangedRef.current = onChatsChanged;
 
   const isGroup = isGroupChat(chat);
+  const groupId = chatGroupId(chat);
   const chatPartner = otherParticipant(chat, user?._id);
-  const partner = partnerLive ?? chatPartner;
+  const partner = usePresence(partnerLive ?? chatPartner ?? null);
+  const memberCount = isGroup ? activeMembers(group).length || chatMembers(chat).length : 0;
+  const canSend = !isGroup || canSendToGroup(group, user?._id);
   const mySettings = chat.settings?.find((s) => s.user === user?._id);
   const isMuted = mySettings?.isMuted ?? chat.isMuted ?? false;
   const isPinned = mySettings?.isPinned ?? chat.isPinned ?? false;
@@ -235,20 +248,23 @@ export function ChatWindow({
     [chat._id, user?._id],
   );
 
-  const load = useCallback(async (options?: { silent?: boolean }) => {
-    if (!options?.silent) setLoading(true);
-    setError(null);
-    try {
-      const data = await messageService.listByChat(chat._id);
-      const sorted = sortMessages(data);
-      setMessages(sorted);
-      void acknowledge(sorted);
-    } catch (err) {
-      setError(getApiErrorMessage(err, "Unable to load messages"));
-    } finally {
-      if (!options?.silent) setLoading(false);
-    }
-  }, [chat._id, acknowledge]);
+  const load = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!options?.silent) setLoading(true);
+      setError(null);
+      try {
+        const data = await messageService.listByChat(chat._id);
+        const sorted = sortMessages(data);
+        setMessages(sorted);
+        void acknowledge(sorted);
+      } catch (err) {
+        setError(getApiErrorMessage(err, "Unable to load messages"));
+      } finally {
+        if (!options?.silent) setLoading(false);
+      }
+    },
+    [chat._id, acknowledge],
+  );
 
   useEffect(() => {
     readRef.current = new Set();
@@ -263,7 +279,12 @@ export function ChatWindow({
       if (document.visibilityState !== "visible") return;
       try {
         const data = sortMessages(await messageService.listByChat(chat._id));
-        setMessages((prev) => (prev.length === data.length && prev.every((m, i) => m._id === data[i]?._id && m.status === data[i]?.status) ? prev : data));
+        setMessages((prev) =>
+          prev.length === data.length &&
+          prev.every((m, i) => m._id === data[i]?._id && m.status === data[i]?.status)
+            ? prev
+            : data,
+        );
         void acknowledge(data);
       } catch {
         /* keep last known messages; a transient poll failure is not an error state */
@@ -301,6 +322,51 @@ export function ChatWindow({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  /** Group details (members, roles, permissions) for group chats. */
+  const loadGroup = useCallback(async () => {
+    if (!groupId) {
+      setGroup(null);
+      return;
+    }
+    try {
+      setGroup(await groupService.byId(groupId));
+    } catch {
+      /* keep whatever the chat payload already carries */
+    }
+  }, [groupId]);
+
+  useEffect(() => {
+    void loadGroup();
+  }, [loadGroup]);
+
+  /** Group rooms + realtime membership/settings events. */
+  useEffect(() => {
+    if (!groupId) return;
+    const socket = getSocket();
+    if (!socket) return;
+    socket.emit("group:join", { groupId });
+
+    const refresh = () => {
+      void loadGroup();
+      chatsChangedRef.current();
+    };
+    const events = [
+      "group:updated",
+      "group:member-added",
+      "group:member-removed",
+      "group:member-left",
+      "group:member-promoted",
+      "group:member-demoted",
+      "group:settings-updated",
+    ];
+    events.forEach((event) => socket.on(event, refresh));
+
+    return () => {
+      socket.emit("group:leave", { groupId });
+      events.forEach((event) => socket.off(event, refresh));
+    };
+  }, [groupId, loadGroup]);
+
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -321,6 +387,11 @@ export function ChatWindow({
 
     socket.on("message:new", onMessage);
     socket.on("message:received", onMessage);
+    const silentRefresh = () => void load({ silent: true });
+    socket.on("message:edited", silentRefresh);
+    socket.on("message:deleted", silentRefresh);
+    socket.on("reaction:added", silentRefresh);
+    socket.on("reaction:removed", silentRefresh);
     socket.on("typing:start", onTyping);
     socket.on("typing:stop", () => setTypingUser(null));
 
@@ -328,10 +399,14 @@ export function ChatWindow({
       socket.emit("chat:leave", { chatId: chat._id });
       socket.off("message:new", onMessage);
       socket.off("message:received", onMessage);
+      socket.off("message:edited", silentRefresh);
+      socket.off("message:deleted", silentRefresh);
+      socket.off("reaction:added", silentRefresh);
+      socket.off("reaction:removed", silentRefresh);
       socket.off("typing:start", onTyping);
       socket.off("typing:stop");
     };
-  }, [chat._id, user?._id, acknowledge]);
+  }, [chat._id, user?._id, acknowledge, load]);
 
   function emitTyping() {
     getSocket()?.emit("typing:start", { chatId: chat._id });
@@ -347,6 +422,11 @@ export function ChatWindow({
         const updated = await messageService.edit(editing._id, content);
         setMessages((prev) => prev.map((m) => (m._id === updated._id ? updated : m)));
         setEditing(null);
+        getSocket()?.emit("message:edited", {
+          chatId: chat._id,
+          messageId: updated._id,
+          message: updated,
+        });
         toast.success("Message updated");
       } else {
         const message = await messageService.send({
@@ -417,7 +497,8 @@ export function ChatWindow({
   async function removeReaction(message: Message) {
     try {
       await messageService.removeReaction(message._id);
-      await load();
+      await load({ silent: true });
+      getSocket()?.emit("reaction:remove", { chatId: chat._id, messageId: message._id });
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Could not remove reaction"));
     }
@@ -449,6 +530,9 @@ export function ChatWindow({
   async function deleteMessage(message: Message, forEveryone: boolean) {
     try {
       await messageService.remove(message._id, forEveryone);
+      if (forEveryone) {
+        getSocket()?.emit("message:deleted", { chatId: chat._id, messageId: message._id });
+      }
       setMessages((prev) =>
         forEveryone
           ? prev.map((m) => (m._id === message._id ? { ...m, isDeleted: true, content: null } : m))
@@ -494,7 +578,11 @@ export function ChatWindow({
     }
   }
 
-  async function updateChatSetting(payload: { isMuted?: boolean; isPinned?: boolean; isArchived?: boolean }) {
+  async function updateChatSetting(payload: {
+    isMuted?: boolean;
+    isPinned?: boolean;
+    isArchived?: boolean;
+  }) {
     try {
       await chatService.updateSettings(chat._id, payload);
       toast.success("Conversation updated");
@@ -504,33 +592,71 @@ export function ChatWindow({
     }
   }
 
-  const title = useMemo(() => chatTitle(chat, user?._id), [chat, user?._id]);
+  const title = useMemo(
+    () => (isGroup ? (group?.name ?? chatTitle(chat, user?._id)) : chatTitle(chat, user?._id)),
+    [chat, group?.name, isGroup, user?._id],
+  );
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-background">
       <header className="flex items-center gap-3 border-b border-border bg-surface px-3 py-3 md:px-5">
-        <Button variant="ghost" size="icon" className="md:hidden" onClick={onBack} aria-label="Back">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden"
+          onClick={onBack}
+          aria-label="Back"
+        >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <UserAvatar
-          name={title}
-          src={isGroup ? chatAvatar(chat, user?._id) : (partner?.avatar ?? null)}
-          online={isPresenceOnline(partner)}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">{title}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {typingUser
-              ? `${typingUser} is typing…`
-              : isGroup
-                ? `${chatMembers(chat).length} members`
-                : presenceLabel(partner)}
-          </p>
-        </div>
-        <Button variant="ghost" size="icon" onClick={() => void startCall("audio")} aria-label="Audio call">
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          onClick={() => isGroup && setGroupInfoOpen(true)}
+          aria-label={isGroup ? "Open group info" : title}
+        >
+          <UserAvatar
+            name={title}
+            src={
+              isGroup ? (group?.avatar ?? chatAvatar(chat, user?._id)) : (partner?.avatar ?? null)
+            }
+            online={!isGroup && isPresenceOnline(partner)}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-foreground">{title}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {typingUser
+                ? `${typingUser} is typing…`
+                : isGroup
+                  ? `${memberCount} members`
+                  : presenceLabel(partner)}
+            </p>
+          </div>
+        </button>
+        {isGroup && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setGroupInfoOpen(true)}
+            aria-label="Group info"
+          >
+            <Users className="h-4 w-4" />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => void startCall("audio")}
+          aria-label="Audio call"
+        >
           <Phone className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={() => void startCall("video")} aria-label="Video call">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => void startCall("video")}
+          aria-label="Video call"
+        >
           <Video className="h-4 w-4" />
         </Button>
         <DropdownMenu>
@@ -595,12 +721,32 @@ export function ChatWindow({
 
       <WallpaperPicker open={wallpaperOpen} onOpenChange={setWallpaperOpen} chatId={chat._id} />
 
+      {isGroup && group && (
+        <GroupInfoPanel
+          group={group}
+          open={groupInfoOpen}
+          onOpenChange={setGroupInfoOpen}
+          currentUserId={user?._id}
+          onChanged={() => {
+            void loadGroup();
+            chatsChangedRef.current();
+          }}
+          onLeft={() => {
+            onBack();
+            chatsChangedRef.current();
+          }}
+        />
+      )}
+
       <ScrollArea className="min-h-0 flex-1" style={wallpaper.style}>
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-3 py-5 md:px-6">
           {loading && <LoadingState label="Loading messages…" />}
           {!loading && error && <ErrorState message={error} onRetry={() => void load()} />}
           {!loading && !error && messages.length === 0 && (
-            <EmptyState title="No messages yet" description="Send the first message to start this conversation." />
+            <EmptyState
+              title="No messages yet"
+              description="Send the first message to start this conversation."
+            />
           )}
           {!loading &&
             !error &&
@@ -609,7 +755,10 @@ export function ChatWindow({
               const starred = message.starredBy?.includes(user?._id ?? "");
               const reply = typeof message.replyTo === "object" ? message.replyTo : null;
               return (
-                <div key={message._id} className={cn("group flex gap-2", mine ? "justify-end" : "justify-start")}>
+                <div
+                  key={message._id}
+                  className={cn("group flex gap-2", mine ? "justify-end" : "justify-start")}
+                >
                   {!mine && isGroup && (
                     <UserAvatar
                       name={senderName(message)}
@@ -619,7 +768,9 @@ export function ChatWindow({
                   )}
                   <div className={cn("max-w-[80%] space-y-1", mine && "items-end text-right")}>
                     {!mine && isGroup && (
-                      <p className="text-xs font-medium text-muted-foreground">{senderName(message)}</p>
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {senderName(message)}
+                      </p>
                     )}
                     <div
                       className={cn(
@@ -639,7 +790,9 @@ export function ChatWindow({
                           {message.attachment?.url && (
                             <MessageAttachment message={message} onPreview={setPreview} />
                           )}
-                          {message.content && <p className="whitespace-pre-wrap">{message.content}</p>}
+                          {message.content && (
+                            <p className="whitespace-pre-wrap">{message.content}</p>
+                          )}
                         </>
                       )}
                       <div className="mt-1 flex items-center justify-end gap-1 text-[10px] opacity-70">
@@ -657,18 +810,27 @@ export function ChatWindow({
                         onClick={() => void removeReaction(message)}
                         className="rounded-full border border-border bg-surface px-2 py-0.5 text-xs"
                       >
-                        {message.reactions?.map((r) => r.emoji).join(" ")} {message.reactions?.length}
+                        {message.reactions?.map((r) => r.emoji).join(" ")}{" "}
+                        {message.reactions?.length}
                       </button>
                     )}
 
                     <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="React">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label="React"
+                          >
                             <SmilePlus className="h-3.5 w-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align={mine ? "end" : "start"} className="flex gap-1 p-1">
+                        <DropdownMenuContent
+                          align={mine ? "end" : "start"}
+                          className="flex gap-1 p-1"
+                        >
                           {REACTIONS.map((emoji) => (
                             <button
                               key={emoji}
@@ -692,7 +854,12 @@ export function ChatWindow({
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="More actions">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label="More actions"
+                          >
                             <MoreVertical className="h-3.5 w-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -741,10 +908,7 @@ export function ChatWindow({
         </div>
       </ScrollArea>
 
-      <form
-        onSubmit={handleSend}
-        className="border-t border-border bg-surface px-3 py-3 md:px-5"
-      >
+      <form onSubmit={handleSend} className="border-t border-border bg-surface px-3 py-3 md:px-5">
         {(replyTo || editing) && (
           <div className="mb-2 flex items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-xs text-muted-foreground">
             <span className="truncate">
@@ -766,6 +930,11 @@ export function ChatWindow({
             </Button>
           </div>
         )}
+        {!canSend && (
+          <p className="mb-2 rounded-md border border-border bg-background px-3 py-2 text-center text-xs text-muted-foreground">
+            Only admins can send messages in this group.
+          </p>
+        )}
         <div className="flex items-center gap-2">
           <input
             ref={fileRef}
@@ -780,22 +949,27 @@ export function ChatWindow({
             type="button"
             variant="ghost"
             size="icon"
-            disabled={uploading}
+            disabled={uploading || !canSend}
             onClick={() => fileRef.current?.click()}
             aria-label="Attach file"
           >
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Paperclip className="h-4 w-4" />
+            )}
           </Button>
           <Input
             value={draft}
+            disabled={!canSend}
             onChange={(e) => {
               setDraft(e.target.value);
               emitTyping();
             }}
-            placeholder="Write a message"
+            placeholder={canSend ? "Write a message" : "Messaging restricted to admins"}
             aria-label="Message"
           />
-          <Button type="submit" disabled={sending || !draft.trim()}>
+          <Button type="submit" disabled={sending || !draft.trim() || !canSend}>
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
@@ -817,12 +991,18 @@ export function ChatWindow({
                   onClick={() => void forwardMessage(item._id)}
                   className="flex w-full items-center gap-3 rounded-md border border-transparent px-3 py-2 text-left text-sm hover:border-border hover:bg-surface-hover"
                 >
-                  <UserAvatar name={chatTitle(item, user?._id)} src={chatAvatar(item, user?._id)} size={32} />
+                  <UserAvatar
+                    name={chatTitle(item, user?._id)}
+                    src={chatAvatar(item, user?._id)}
+                    size={32}
+                  />
                   {chatTitle(item, user?._id)}
                 </button>
               ))}
             {chats.length <= 1 && (
-              <p className="py-6 text-center text-sm text-muted-foreground">No other conversations available.</p>
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No other conversations available.
+              </p>
             )}
           </div>
           <DialogFooter>

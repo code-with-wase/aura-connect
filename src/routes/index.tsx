@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Loader2, Pin, Plus, Search } from "lucide-react";
+import { Loader2, MessageSquarePlus, Pin, Plus, Search, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AppShell } from "@/components/aura/app-shell";
 import { ChatWindow } from "@/components/aura/chat-window";
+import { CreateGroupDialog } from "@/components/aura/create-group-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/aura/states";
 import { UserAvatar } from "@/components/aura/user-avatar";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/context/auth-context";
 import type { Chat, User } from "@/lib/api-types";
@@ -33,11 +40,16 @@ import {
   otherParticipant,
 } from "@/lib/chat-utils";
 import { getSocket } from "@/lib/socket";
+import { getPresence, usePresence } from "@/lib/presence-store";
 import { cn } from "@/lib/utils";
 import { chatService } from "@/services/chatService";
 import { userService } from "@/services/userService";
 
 export const Route = createFileRoute("/")({
+  validateSearch: (search: Record<string, unknown>): { chat?: string } => {
+    const chat = search["chat"];
+    return typeof chat === "string" ? { chat } : {};
+  },
   head: () => ({
     meta: [
       { title: "Inbox — Nexora" },
@@ -69,12 +81,16 @@ type Filter = (typeof FILTERS)[number];
 
 function Inbox() {
   const { user } = useAuth();
+  const { chat: chatParam } = Route.useSearch();
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(chatParam ?? null);
   const [filter, setFilter] = useState<Filter>("All");
+  const [groupOpen, setGroupOpen] = useState(false);
+  /** Subscribes to `presence:updated`, so the list re-renders on presence changes. */
+  usePresence(user ?? null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -158,15 +174,22 @@ function Inbox() {
                 Nexora
               </h1>
               <p className="mt-1.5 text-[13px] text-muted-foreground">
-                {totalUnread > 0 ? `${totalUnread} unread message${totalUnread === 1 ? "" : "s"}` : "You are all caught up"}
+                {totalUnread > 0
+                  ? `${totalUnread} unread message${totalUnread === 1 ? "" : "s"}`
+                  : "You are all caught up"}
               </p>
             </div>
-            <NewChatDialog
-              onCreated={(chat) => {
-                setChats((prev) => (prev.some((c) => c._id === chat._id) ? prev : [chat, ...prev]));
-                setActiveId(chat._id);
-              }}
-            />
+            <div className="flex items-center gap-2">
+              <NewChatDialog
+                onCreated={(chat) => {
+                  setChats((prev) =>
+                    prev.some((c) => c._id === chat._id) ? prev : [chat, ...prev],
+                  );
+                  setActiveId(chat._id);
+                }}
+                onNewGroup={() => setGroupOpen(true)}
+              />
+            </div>
           </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -208,6 +231,8 @@ function Inbox() {
             !error &&
             filtered.map((chat) => {
               const partner = otherParticipant(chat, user?._id);
+              const live = getPresence(partner?._id);
+              const online = live ? live.isOnline : isPresenceOnline(partner);
               const unread = chatUnreadCount(chat, user?._id);
               const pinned = myParticipant(chat, user?._id)?.isPinned ?? chat.isPinned ?? false;
               const isActive = activeId === chat._id;
@@ -228,7 +253,7 @@ function Inbox() {
                     name={chatTitle(chat, user?._id)}
                     src={chatAvatar(chat, user?._id)}
                     size={48}
-                    online={isPresenceOnline(partner)}
+                    online={!isGroupChat(chat) && online}
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
@@ -287,11 +312,26 @@ function Inbox() {
           </div>
         </section>
       )}
+
+      <CreateGroupDialog
+        open={groupOpen}
+        onOpenChange={setGroupOpen}
+        onCreated={async ({ chatId }) => {
+          await load();
+          if (chatId) setActiveId(chatId);
+        }}
+      />
     </div>
   );
 }
 
-function NewChatDialog({ onCreated }: { onCreated: (chat: Chat) => void }) {
+function NewChatDialog({
+  onCreated,
+  onNewGroup,
+}: {
+  onCreated: (chat: Chat) => void;
+  onNewGroup: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
   const [results, setResults] = useState<User[]>([]);
@@ -327,48 +367,81 @@ function NewChatDialog({ onCreated }: { onCreated: (chat: Chat) => void }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          size="icon"
-          aria-label="New conversation"
-          className="h-12 w-12 rounded-2xl bg-accent text-accent-foreground shadow-lg shadow-accent/25 hover:bg-accent/90"
-        >
-          <Plus className="h-5 w-5" strokeWidth={2.6} />
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New conversation</DialogTitle>
-          <DialogDescription>Search for a colleague by name, username, email or phone.</DialogDescription>
-        </DialogHeader>
-        <form className="flex gap-2" onSubmit={search}>
-          <Input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Search people" />
-          <Button type="submit" disabled={searching || !term.trim()}>
-            {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="icon"
+            aria-label="New conversation"
+            className="h-12 w-12 rounded-2xl bg-accent text-accent-foreground shadow-lg shadow-accent/25 hover:bg-accent/90"
+          >
+            <Plus className="h-5 w-5" strokeWidth={2.6} />
           </Button>
-        </form>
-        <div className="max-h-64 space-y-1 overflow-y-auto">
-          {results.map((person) => (
-            <div
-              key={person._id}
-              className="flex items-center gap-3 rounded-md border border-border px-3 py-2"
-            >
-              <UserAvatar name={person.name} src={person.avatar} size={32} online={person.isOnline} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{person.name}</p>
-                <p className="truncate text-xs text-muted-foreground">@{person.username}</p>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onClick={() => setOpen(true)}>
+            <MessageSquarePlus className="mr-2 h-4 w-4" />
+            New chat
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onNewGroup}>
+            <Users className="mr-2 h-4 w-4" />
+            New group
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New conversation</DialogTitle>
+            <DialogDescription>
+              Search for a colleague by name, username, email or phone.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="flex gap-2" onSubmit={search}>
+            <Input
+              value={term}
+              onChange={(e) => setTerm(e.target.value)}
+              placeholder="Search people"
+            />
+            <Button type="submit" disabled={searching || !term.trim()}>
+              {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
+            </Button>
+          </form>
+          <div className="max-h-64 space-y-1 overflow-y-auto">
+            {results.map((person) => (
+              <div
+                key={person._id}
+                className="flex items-center gap-3 rounded-md border border-border px-3 py-2"
+              >
+                <UserAvatar
+                  name={person.name}
+                  src={person.avatar}
+                  size={32}
+                  online={person.isOnline}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">{person.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">@{person.username}</p>
+                </div>
+                <Button
+                  size="sm"
+                  disabled={creatingId === person._id}
+                  onClick={() => void startChat(person._id)}
+                >
+                  {creatingId === person._id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Chat"
+                  )}
+                </Button>
               </div>
-              <Button size="sm" disabled={creatingId === person._id} onClick={() => void startChat(person._id)}>
-                {creatingId === person._id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Chat"}
-              </Button>
-            </div>
-          ))}
-          {!searching && results.length === 0 && (
-            <p className="py-6 text-center text-sm text-muted-foreground">No results yet.</p>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+            ))}
+            {!searching && results.length === 0 && (
+              <p className="py-6 text-center text-sm text-muted-foreground">No results yet.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
