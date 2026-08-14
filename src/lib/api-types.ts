@@ -34,6 +34,8 @@ export type Attachment = {
 
 export type Reaction = { user: string | User; emoji: string; createdAt?: string };
 
+export type MessageStatus = "sending" | "sent" | "delivered" | "read" | "failed";
+
 export type Message = {
   _id: string;
   chat: string;
@@ -47,10 +49,25 @@ export type Message = {
   isForwarded?: boolean;
   isEdited?: boolean;
   isDeleted?: boolean;
+  status?: MessageStatus;
+  deliveredAt?: string | null;
+  readAt?: string | null;
   deliveredTo?: Array<{ user: string; deliveredAt?: string }>;
   readBy?: Array<{ user: string; readAt?: string }>;
   createdAt: string;
   updatedAt?: string;
+};
+
+/** Backend shape: chat.participants = [{ user, unreadCount, isMuted, ... }] */
+export type ChatParticipant = {
+  user: User | string;
+  isAdmin?: boolean;
+  isMuted?: boolean;
+  isPinned?: boolean;
+  isArchived?: boolean;
+  unreadCount?: number;
+  leftAt?: string | null;
+  lastReadAt?: string | null;
 };
 
 export type Chat = {
@@ -59,8 +76,8 @@ export type Chat = {
   isGroup?: boolean;
   name?: string | null;
   avatar?: string | null;
-  participants?: User[];
-  members?: User[];
+  participants?: Array<ChatParticipant | User>;
+  members?: Array<ChatParticipant | User>;
   group?: Group | string | null;
   lastMessage?: Message | null;
   unreadCount?: number;
@@ -112,6 +129,7 @@ export type Status = {
   media?: { url?: string; thumbnail?: string | null } | null;
   backgroundColor?: string | null;
   views?: Array<{ user: User | string; viewedAt?: string }>;
+  viewers?: Array<{ user: User | string; viewedAt?: string }>;
   viewsCount?: number;
   createdAt: string;
   expiresAt?: string;

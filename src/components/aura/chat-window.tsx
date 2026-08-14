@@ -5,6 +5,7 @@ import {
   Bell,
   Check,
   CheckCheck,
+  Download,
   Forward,
   Loader2,
   MoreVertical,
@@ -46,17 +47,21 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/context/auth-context";
-import type { Chat, Message } from "@/lib/api-types";
+import type { Chat, Message, User } from "@/lib/api-types";
 import { getApiErrorMessage } from "@/lib/axios";
 import {
   chatAvatar,
+  chatMembers,
   chatTitle,
   formatTime,
   isGroupChat,
+  isPresenceOnline,
   otherParticipant,
+  presenceLabel,
   senderId,
   senderName,
 } from "@/lib/chat-utils";
+import { downloadFile, formatFileSize } from "@/lib/media";
 import { getSocket } from "@/lib/socket";
 import { cn } from "@/lib/utils";
 import { callService } from "@/services/callService";
@@ -64,8 +69,106 @@ import { chatService } from "@/services/chatService";
 import { contactService } from "@/services/contactService";
 import { messageService } from "@/services/messageService";
 import { uploadService } from "@/services/uploadService";
+import { userService } from "@/services/userService";
 
 const REACTIONS = ["👍", "❤️", "😂", "🎉", "🙏"];
+const POLL_MS = 6000;
+
+/** Single check = sent, double = delivered, blue double = read. */
+function MessageTicks({ message }: { message: Message }) {
+  const status = message.status ?? (message.readAt ? "read" : message.deliveredAt ? "delivered" : "sent");
+  if (status === "sending") return <Loader2 className="h-3 w-3 animate-spin" />;
+  if (status === "read") return <CheckCheck className="h-3 w-3 text-accent" aria-label="Read" />;
+  if (status === "delivered") return <CheckCheck className="h-3 w-3" aria-label="Delivered" />;
+  return <Check className="h-3 w-3" aria-label="Sent" />;
+}
+
+function MessageAttachment({
+  message,
+  onPreview,
+}: {
+  message: Message;
+  onPreview: (message: Message) => void;
+}) {
+  const attachment = message.attachment;
+  if (!attachment?.url) return null;
+  const fileName = attachment.fileName ?? "attachment";
+  const size = formatFileSize(attachment.fileSize);
+
+  if (message.type === "image") {
+    return (
+      <div className="mb-2 space-y-1">
+        <button type="button" onClick={() => onPreview(message)} className="block w-full">
+          <img
+            src={attachment.url}
+            alt={fileName}
+            className="max-h-64 w-full rounded-md object-cover"
+            loading="lazy"
+          />
+        </button>
+        <button
+          type="button"
+          onClick={() => void downloadFile(attachment.url!, fileName)}
+          className="inline-flex items-center gap-1 text-[11px] underline opacity-90"
+        >
+          <Download className="h-3 w-3" /> Download{size ? ` · ${size}` : ""}
+        </button>
+      </div>
+    );
+  }
+
+  if (message.type === "video") {
+    return (
+      <div className="mb-2 space-y-1">
+        <video
+          src={attachment.url}
+          controls
+          preload="metadata"
+          playsInline
+          className="max-h-64 w-full rounded-md bg-black/40"
+        />
+        <button
+          type="button"
+          onClick={() => void downloadFile(attachment.url!, fileName)}
+          className="inline-flex items-center gap-1 text-[11px] underline opacity-90"
+        >
+          <Download className="h-3 w-3" /> Download video{size ? ` · ${size}` : ""}
+        </button>
+      </div>
+    );
+  }
+
+  if (message.type === "audio") {
+    return (
+      <div className="mb-2 space-y-1">
+        <audio src={attachment.url} controls className="w-full" />
+        <button
+          type="button"
+          onClick={() => void downloadFile(attachment.url!, fileName)}
+          className="inline-flex items-center gap-1 text-[11px] underline opacity-90"
+        >
+          <Download className="h-3 w-3" /> Download audio
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void downloadFile(attachment.url!, fileName)}
+      className="mb-1 flex w-full items-center gap-2 rounded-md border border-border/50 px-2 py-1.5 text-left text-xs"
+    >
+      <Download className="h-4 w-4 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{fileName}</span>
+      {size && <span className="shrink-0 opacity-70">{size}</span>}
+    </button>
+  );
+}
+
+function sortMessages(list: Message[]) {
+  return [...list].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
 
 export function ChatWindow({
   chat,
@@ -91,35 +194,103 @@ export function ChatWindow({
   const [editing, setEditing] = useState<Message | null>(null);
   const [forwarding, setForwarding] = useState<Message | null>(null);
   const [typingUser, setTypingUser] = useState<string | null>(null);
+  const [partnerLive, setPartnerLive] = useState<User | null>(null);
+  const [preview, setPreview] = useState<Message | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const readRef = useRef<Set<string>>(new Set());
 
   const isGroup = isGroupChat(chat);
-  const partner = otherParticipant(chat, user?._id);
+  const chatPartner = otherParticipant(chat, user?._id);
+  const partner = partnerLive ?? chatPartner;
   const mySettings = chat.settings?.find((s) => s.user === user?._id);
   const isMuted = mySettings?.isMuted ?? chat.isMuted ?? false;
   const isPinned = mySettings?.isPinned ?? chat.isPinned ?? false;
+
+  /** Marks every incoming message as delivered + read so the sender gets blue ticks. */
+  const acknowledge = useCallback(
+    async (list: Message[]) => {
+      const mineId = user?._id;
+      if (!mineId) return;
+      const pending = list.filter(
+        (m) => senderId(m) !== mineId && m.status !== "read" && !readRef.current.has(m._id),
+      );
+      if (!pending.length) return;
+      pending.forEach((m) => readRef.current.add(m._id));
+      await Promise.allSettled(
+        pending.map(async (m) => {
+          await messageService.markDelivered(m._id).catch(() => undefined);
+          await messageService.markRead(m._id).catch(() => undefined);
+        }),
+      );
+      await chatService.markRead(chat._id).catch(() => undefined);
+      setMessages((prev) =>
+        prev.map((m) => (pending.some((p) => p._id === m._id) ? { ...m, status: "read" } : m)),
+      );
+      onChatsChanged();
+    },
+    [chat._id, user?._id, onChatsChanged],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await messageService.listByChat(chat._id);
-      const sorted = [...data].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      );
+      const sorted = sortMessages(data);
       setMessages(sorted);
-      await chatService.markRead(chat._id).catch(() => undefined);
+      void acknowledge(sorted);
     } catch (err) {
       setError(getApiErrorMessage(err, "Unable to load messages"));
     } finally {
       setLoading(false);
     }
-  }, [chat._id]);
+  }, [chat._id, acknowledge]);
 
   useEffect(() => {
+    readRef.current = new Set();
     void load();
   }, [load]);
+
+  /** Serverless backend => sockets are unreliable, so keep a light poll in sync. */
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const data = sortMessages(await messageService.listByChat(chat._id));
+        setMessages((prev) => (prev.length === data.length && prev.every((m, i) => m._id === data[i]?._id && m.status === data[i]?.status) ? prev : data));
+        void acknowledge(data);
+      } catch {
+        /* keep last known messages; a transient poll failure is not an error state */
+      }
+    }, POLL_MS);
+    return () => clearInterval(interval);
+  }, [chat._id, acknowledge]);
+
+  /** Live presence for the other participant (REST heartbeat based). */
+  useEffect(() => {
+    if (isGroup || !chatPartner?._id) {
+      setPartnerLive(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchPartner = async () => {
+      try {
+        const fresh = await userService.byId(chatPartner._id);
+        if (!cancelled) setPartnerLive(fresh);
+      } catch {
+        /* fall back to the participant embedded in the chat */
+      }
+    };
+    void fetchPartner();
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") void fetchPartner();
+    }, 15_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isGroup, chatPartner?._id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -134,7 +305,7 @@ export function ChatWindow({
       const message = (payload as { message?: Message }).message ?? (payload as Message);
       if (!message?._id || message.chat !== chat._id) return;
       setMessages((prev) => (prev.some((m) => m._id === message._id) ? prev : [...prev, message]));
-      messageService.markRead(message._id).catch(() => undefined);
+      void acknowledge([message]);
       onChatsChanged();
     };
     const onTyping = (payload: { chatId?: string; userId?: string; name?: string }) => {
@@ -155,7 +326,7 @@ export function ChatWindow({
       socket.off("typing:start", onTyping);
       socket.off("typing:stop");
     };
-  }, [chat._id, user?._id, onChatsChanged]);
+  }, [chat._id, user?._id, onChatsChanged, acknowledge]);
 
   function emitTyping() {
     getSocket()?.emit("typing:start", { chatId: chat._id });
@@ -296,7 +467,7 @@ export function ChatWindow({
   }
 
   async function startCall(type: "audio" | "video") {
-    const participantIds = (chat.participants ?? chat.members ?? [])
+    const participantIds = chatMembers(chat)
       .map((member) => member._id)
       .filter((id) => id && id !== user?._id);
     if (!participantIds.length) {
@@ -336,17 +507,19 @@ export function ChatWindow({
         <Button variant="ghost" size="icon" className="md:hidden" onClick={onBack} aria-label="Back">
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <UserAvatar name={title} src={chatAvatar(chat, user?._id)} online={partner?.isOnline} />
+        <UserAvatar
+          name={title}
+          src={isGroup ? chatAvatar(chat, user?._id) : (partner?.avatar ?? null)}
+          online={isPresenceOnline(partner)}
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-foreground">{title}</p>
           <p className="truncate text-xs text-muted-foreground">
             {typingUser
               ? `${typingUser} is typing…`
               : isGroup
-                ? `${(chat.participants ?? chat.members ?? []).length} members`
-                : partner?.isOnline
-                  ? "Online"
-                  : "Offline"}
+                ? `${chatMembers(chat).length} members`
+                : presenceLabel(partner)}
           </p>
         </div>
         <Button variant="ghost" size="icon" onClick={() => void startCall("audio")} aria-label="Audio call">
@@ -458,23 +631,8 @@ export function ChatWindow({
                         <span className="italic opacity-70">This message was deleted</span>
                       ) : (
                         <>
-                          {message.attachment?.url && message.type === "image" && (
-                            <img
-                              src={message.attachment.url}
-                              alt={message.attachment.fileName ?? "Attachment"}
-                              className="mb-2 max-h-64 rounded-md object-cover"
-                              loading="lazy"
-                            />
-                          )}
-                          {message.attachment?.url && message.type !== "image" && (
-                            <a
-                              href={message.attachment.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="mb-1 block underline"
-                            >
-                              {message.attachment.fileName ?? "Open attachment"}
-                            </a>
+                          {message.attachment?.url && (
+                            <MessageAttachment message={message} onPreview={setPreview} />
                           )}
                           {message.content && <p className="whitespace-pre-wrap">{message.content}</p>}
                         </>
@@ -484,12 +642,7 @@ export function ChatWindow({
                         {message.isEdited && <span>edited</span>}
                         {starred && <Star className="h-3 w-3" />}
                         <span>{formatTime(message.createdAt)}</span>
-                        {mine &&
-                          ((message.readBy?.length ?? 0) > 0 ? (
-                            <CheckCheck className="h-3 w-3" />
-                          ) : (
-                            <Check className="h-3 w-3" />
-                          ))}
+                        {mine && <MessageTicks message={message} />}
                       </div>
                     </div>
 
@@ -670,6 +823,35 @@ export function ChatWindow({
           <DialogFooter>
             <Button variant="outline" onClick={() => setForwarding(null)}>
               Cancel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(preview)} onOpenChange={(open) => !open && setPreview(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="truncate">
+              {preview?.attachment?.fileName ?? "Attachment"}
+            </DialogTitle>
+            <DialogDescription>{formatTime(preview?.createdAt)}</DialogDescription>
+          </DialogHeader>
+          {preview?.attachment?.url && (
+            <img
+              src={preview.attachment.url}
+              alt={preview.attachment.fileName ?? "Attachment"}
+              className="max-h-[70vh] w-full rounded-md object-contain"
+            />
+          )}
+          <DialogFooter>
+            <Button
+              onClick={() =>
+                preview?.attachment?.url &&
+                void downloadFile(preview.attachment.url, preview.attachment.fileName)
+              }
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download original
             </Button>
           </DialogFooter>
         </DialogContent>

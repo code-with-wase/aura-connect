@@ -11,6 +11,7 @@ import {
 
 import type { User } from "@/lib/api-types";
 import { tokenStore } from "@/lib/axios";
+import { startPresence, stopPresence } from "@/lib/presence";
 import { disconnectSocket, getSocket } from "@/lib/socket";
 import { authService, type LoginPayload, type RegisterPayload } from "@/services/authService";
 import { userService } from "@/services/userService";
@@ -43,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const me = await userService.me();
       setUser(me);
       getSocket();
+      startPresence();
     } catch {
       setUser(null);
     } finally {
@@ -60,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStore.set(result.accessToken, result.refreshToken);
       setUser(result.user);
       getSocket();
+      startPresence();
       await navigate({ to: "/" });
     },
     [navigate],
@@ -76,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       /* logout locally regardless */
     }
+    stopPresence();
     disconnectSocket();
     tokenStore.clear();
     setUser(null);

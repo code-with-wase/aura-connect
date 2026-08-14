@@ -115,7 +115,7 @@ function StatusPage() {
                     </div>
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Eye className="h-3.5 w-3.5" />
-                      {status.viewsCount ?? status.views?.length ?? 0}
+                      {status.viewsCount ?? status.viewers?.length ?? status.views?.length ?? 0}
                     </span>
                     <Button variant="ghost" size="icon" aria-label="Delete status" onClick={() => void removeStatus(status._id)}>
                       <Trash2 className="h-4 w-4" />
@@ -160,9 +160,12 @@ function StatusPage() {
             <DialogTitle>{viewing?.user?.name ?? "Status"}</DialogTitle>
             <DialogDescription>{formatDateTime(viewing?.createdAt)}</DialogDescription>
           </DialogHeader>
-          {viewing?.media?.url && (
-            <img src={viewing.media.url} alt="Status media" className="max-h-80 w-full rounded-md object-cover" />
-          )}
+          {viewing?.media?.url &&
+            (viewing.type === "video" ? (
+              <video src={viewing.media.url} controls playsInline className="max-h-80 w-full rounded-md" />
+            ) : (
+              <img src={viewing.media.url} alt="Status media" className="max-h-80 w-full rounded-md object-contain" />
+            ))}
           {viewing?.content && <p className="text-sm text-foreground">{viewing.content}</p>}
         </DialogContent>
       </Dialog>
@@ -174,16 +177,24 @@ function CreateStatusDialog({ onCreated }: { onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState("");
   const [busy, setBusy] = useState(false);
-  const [media, setMedia] = useState<{ url: string; publicId?: string | null; mimeType?: string | null } | null>(
-    null,
-  );
+  const [media, setMedia] = useState<{
+    url: string;
+    publicId?: string | null;
+    mimeType?: string | null;
+    fileName?: string | null;
+  } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function upload(file: File) {
     setBusy(true);
     try {
       const uploaded = await uploadService.single(file);
-      setMedia({ url: uploaded.url, publicId: uploaded.publicId ?? null, mimeType: uploaded.mimeType ?? file.type });
+      setMedia({
+        url: uploaded.url,
+        publicId: uploaded.publicId ?? null,
+        mimeType: uploaded.mimeType ?? file.type,
+        fileName: uploaded.fileName ?? file.name,
+      });
       toast.success("Media attached");
     } catch (err) {
       toast.error(getApiErrorMessage(err, "Upload failed"));
@@ -197,7 +208,7 @@ function CreateStatusDialog({ onCreated }: { onCreated: () => void }) {
     setBusy(true);
     try {
       const type = media ? (media.mimeType?.startsWith("video/") ? "video" : "image") : "text";
-      await statusService.create({ type, content: content.trim() || null, media });
+      await statusService.create({ type, content: content.trim() || null, media, privacy: "everyone" });
       toast.success("Status posted");
       setOpen(false);
       setContent("");

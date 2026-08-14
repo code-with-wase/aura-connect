@@ -21,7 +21,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/context/auth-context";
 import type { Chat, User } from "@/lib/api-types";
 import { getApiErrorMessage } from "@/lib/axios";
-import { chatAvatar, chatTitle, formatTime, messagePreview, otherParticipant } from "@/lib/chat-utils";
+import {
+  chatAvatar,
+  chatTitle,
+  chatUnreadCount,
+  formatTime,
+  isPresenceOnline,
+  messagePreview,
+  otherParticipant,
+} from "@/lib/chat-utils";
 import { getSocket } from "@/lib/socket";
 import { cn } from "@/lib/utils";
 import { chatService } from "@/services/chatService";
@@ -77,6 +85,19 @@ function Inbox() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** The API is serverless, so refresh the list periodically for new messages. */
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        setChats(await chatService.list());
+      } catch {
+        /* keep the current list on a transient failure */
+      }
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const socket = getSocket();
@@ -144,6 +165,7 @@ function Inbox() {
             !error &&
             filtered.map((chat) => {
               const partner = otherParticipant(chat, user?._id);
+              const unread = chatUnreadCount(chat, user?._id);
               return (
                 <button
                   key={chat._id}
@@ -157,7 +179,7 @@ function Inbox() {
                   <UserAvatar
                     name={chatTitle(chat, user?._id)}
                     src={chatAvatar(chat, user?._id)}
-                    online={partner?.isOnline}
+                    online={isPresenceOnline(partner)}
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
@@ -172,9 +194,9 @@ function Inbox() {
                       <span className="truncate text-xs text-muted-foreground">
                         {messagePreview(chat.lastMessage)}
                       </span>
-                      {(chat.unreadCount ?? 0) > 0 && (
+                      {unread > 0 && (
                         <span className="rounded-full bg-accent px-1.5 text-[10px] font-semibold text-accent-foreground">
-                          {chat.unreadCount}
+                          {unread}
                         </span>
                       )}
                     </span>
