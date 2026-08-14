@@ -104,18 +104,33 @@ export function formatDuration(seconds?: number): string {
   return `${mins}m ${secs}s`;
 }
 
-/** Human presence label: "Online" or "last seen …" — never a misleading hard Offline. */
+/** WhatsApp-style presence label: "online", "last seen today at 10:20 AM", … */
 export function presenceLabel(user?: Pick<User, "isOnline" | "lastSeen"> | null): string {
   if (!user) return "";
-  if (user.isOnline) return "Online";
-  if (!user.lastSeen) return "Offline";
+  if (user.isOnline) return "online";
+  if (!user.lastSeen) return "last seen recently";
   const seen = new Date(user.lastSeen);
-  if (Number.isNaN(seen.getTime())) return "Offline";
+  if (Number.isNaN(seen.getTime())) return "last seen recently";
   const diff = Date.now() - seen.getTime();
-  if (diff < 60_000) return "Online";
-  if (diff < 3_600_000) return `last seen ${Math.max(1, Math.round(diff / 60_000))}m ago`;
-  const sameDay = seen.toDateString() === new Date().toDateString();
-  return sameDay ? `last seen ${formatTime(user.lastSeen)}` : `last seen ${formatDateTime(user.lastSeen)}`;
+  if (diff < 60_000) return "online";
+
+  const time = seen.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+
+  if (seen.toDateString() === today.toDateString()) return `last seen today at ${time}`;
+  if (seen.toDateString() === yesterday.toDateString()) return `last seen yesterday at ${time}`;
+  if (diff < 7 * 86_400_000) {
+    const weekday = seen.toLocaleDateString(undefined, { weekday: "long" });
+    return `last seen ${weekday} at ${time}`;
+  }
+  const date = seen.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
+  return `last seen ${date} at ${time}`;
 }
 
 export function isPresenceOnline(user?: Pick<User, "isOnline" | "lastSeen"> | null): boolean {
