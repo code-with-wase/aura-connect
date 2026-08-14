@@ -55,10 +55,8 @@ export const contactService = {
     return data.data;
   },
   /**
-   * Match normalized phone numbers with registered Aura users
-   * Returns users that match the provided phone numbers and aren't already contacts/blocked
-   * Requires backend endpoint: POST /contact/match-phones with { phones: string[] }
-   * Response: { users: SearchResult[] }
+   * Match normalized phone numbers with registered Aura users.
+   * Uses the backend's contract: POST /contact/sync with { phoneNumbers: string[] }
    */
   async matchPhoneNumbers(normalizedPhones: string[]): Promise<SearchResult[]> {
     if (!normalizedPhones || normalizedPhones.length === 0) {
@@ -67,15 +65,14 @@ export const contactService = {
 
     try {
       const { data } = await axiosInstance.post<ApiResponse<{ users: SearchRow[] }>>(
-        "/contact/match-phones",
-        { phones: normalizedPhones },
+        "/contact/sync",
+        { phoneNumbers: normalizedPhones },
       );
       return (data.data?.users ?? [])
         .map(normalizeSearchRow)
         .filter((row): row is SearchResult => row !== null);
     } catch (error) {
-      // If the endpoint doesn't exist, log a clear error
-      console.error("Phone matching endpoint not available. Backend should implement POST /contact/match-phones", error);
+      console.error("Phone sync endpoint not available. Backend should implement POST /contact/sync", error);
       throw error;
     }
   },
