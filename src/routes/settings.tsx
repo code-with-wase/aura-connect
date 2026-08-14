@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { Loader2, LogOut, Wallpaper as WallpaperIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
