@@ -1,13 +1,13 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Bell,
+  CircleDashed,
   Contact as ContactIcon,
   LogOut,
   MessageSquare,
   MessagesSquare,
   Moon,
   Phone,
-  Radio,
   Settings,
   Sun,
   User as UserIcon,
@@ -26,7 +26,7 @@ const NAV = [
   { to: "/", label: "Chats", icon: MessageSquare },
   { to: "/contacts", label: "Contacts", icon: ContactIcon },
   { to: "/groups", label: "Groups", icon: Users },
-  { to: "/status", label: "Status", icon: Radio },
+  { to: "/status", label: "Status", icon: CircleDashed },
   { to: "/calls", label: "Calls", icon: Phone },
   { to: "/notifications", label: "Notifications", icon: Bell },
   { to: "/settings", label: "Settings", icon: Settings },
@@ -35,7 +35,7 @@ const NAV = [
 /** Primary mobile tabs — mirrors the reference mobile layout. */
 const MOBILE_NAV = [
   { to: "/", label: "Chats", icon: MessagesSquare },
-  { to: "/status", label: "Status", icon: Radio },
+  { to: "/status", label: "Status", icon: CircleDashed },
   { to: "/groups", label: "Groups", icon: Users },
   { to: "/settings", label: "You", icon: UserIcon },
 ] as const;
