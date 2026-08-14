@@ -5,10 +5,23 @@ export const statusService = {
   async create(payload: {
     type: "text" | "image" | "video";
     content?: string | null;
-    media?: { url?: string; publicId?: string | null; mimeType?: string | null } | null;
-    backgroundColor?: string | null;
+    media?: { url?: string; publicId?: string | null; mimeType?: string | null; fileName?: string | null } | null;
+    background?: string | null;
+    privacy?: "everyone" | "contacts" | "onlySharedWith";
   }) {
-    const { data } = await axiosInstance.post<ApiResponse<{ status: Status }>>("/status", payload);
+    // The API rejects a media object on text statuses and requires media.url otherwise.
+    const body: Record<string, unknown> = { type: payload.type, privacy: payload.privacy ?? "everyone" };
+    if (payload.content?.trim()) body["content"] = payload.content.trim();
+    if (payload.background) body["background"] = payload.background;
+    if (payload.type !== "text" && payload.media?.url) {
+      body["media"] = {
+        url: payload.media.url,
+        publicId: payload.media.publicId ?? null,
+        mimeType: payload.media.mimeType ?? null,
+        fileName: payload.media.fileName ?? null,
+      };
+    }
+    const { data } = await axiosInstance.post<ApiResponse<{ status: Status }>>("/status", body);
     return data.data.status;
   },
   async feed() {
