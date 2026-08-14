@@ -5,7 +5,9 @@ export function isGroupChat(chat: Chat) {
 }
 
 function isUserObject(value: unknown): value is User {
-  return Boolean(value && typeof value === "object" && "name" in (value as Record<string, unknown>));
+  return Boolean(
+    value && typeof value === "object" && "name" in (value as Record<string, unknown>),
+  );
 }
 
 /**
@@ -25,7 +27,10 @@ export function chatMembers(chat: Chat): User[] {
 
 function participantEntries(chat: Chat): ChatParticipant[] {
   const raw = (chat.participants ?? chat.members ?? []) as Array<ChatParticipant | User>;
-  return raw.filter((entry): entry is ChatParticipant => Boolean(entry) && typeof entry === "object" && "user" in entry);
+  return raw.filter(
+    (entry): entry is ChatParticipant =>
+      Boolean(entry) && typeof entry === "object" && "user" in entry,
+  );
 }
 
 function participantId(entry: ChatParticipant): string | undefined {
@@ -52,7 +57,12 @@ export function chatTitle(chat: Chat, currentUserId?: string): string {
     return group?.name ?? chat.name ?? "Group";
   }
   const partner = otherParticipant(chat, currentUserId);
-  return partner?.name ?? (partner?.username ? `@${partner.username}` : null) ?? chat.name ?? "Conversation";
+  return (
+    partner?.name ??
+    (partner?.username ? `@${partner.username}` : null) ??
+    chat.name ??
+    "Conversation"
+  );
 }
 
 export function chatAvatar(chat: Chat, currentUserId?: string): string | null {
@@ -104,33 +114,39 @@ export function formatDuration(seconds?: number): string {
   return `${mins}m ${secs}s`;
 }
 
-/** WhatsApp-style presence label: "online", "last seen today at 10:20 AM", … */
-export function presenceLabel(user?: Pick<User, "isOnline" | "lastSeen"> | null): string {
+/** WhatsApp-style presence label: "Online", "Last seen today at 10:20 AM", … */
+export function presenceLabel(
+  user?: (Pick<User, "isOnline" | "lastSeen"> & { privacy?: User["privacy"] }) | null,
+): string {
   if (!user) return "";
-  if (user.isOnline) return "online";
-  if (!user.lastSeen) return "last seen recently";
+  if (user.isOnline) return "Online";
+  // Respect the user's own last-seen privacy setting.
+  if (user.privacy?.lastSeen === "nobody") return "";
+  if (!user.lastSeen) return "Last seen recently";
   const seen = new Date(user.lastSeen);
-  if (Number.isNaN(seen.getTime())) return "last seen recently";
+  if (Number.isNaN(seen.getTime())) return "Last seen recently";
   const diff = Date.now() - seen.getTime();
-  if (diff < 60_000) return "online";
+  if (diff < 60_000) return "Online";
 
   const time = seen.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
 
-  if (seen.toDateString() === today.toDateString()) return `last seen today at ${time}`;
-  if (seen.toDateString() === yesterday.toDateString()) return `last seen yesterday at ${time}`;
-  if (diff < 7 * 86_400_000) {
-    const weekday = seen.toLocaleDateString(undefined, { weekday: "long" });
-    return `last seen ${weekday} at ${time}`;
-  }
+  if (seen.toDateString() === today.toDateString()) return `Last seen today at ${time}`;
+  if (seen.toDateString() === yesterday.toDateString()) return `Last seen yesterday at ${time}`;
   const date = seen.toLocaleDateString(undefined, {
     day: "2-digit",
     month: "2-digit",
     year: "2-digit",
   });
-  return `last seen ${date} at ${time}`;
+  return `Last seen ${date} at ${time}`;
+}
+
+/** `chat.group` is populated by the backend for group chats. */
+export function chatGroupId(chat: Chat): string | null {
+  if (!chat.group) return null;
+  return typeof chat.group === "string" ? chat.group : (chat.group._id ?? null);
 }
 
 export function isPresenceOnline(user?: Pick<User, "isOnline" | "lastSeen"> | null): boolean {

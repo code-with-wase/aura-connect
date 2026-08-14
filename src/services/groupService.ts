@@ -1,10 +1,20 @@
 import axiosInstance from "@/lib/axios";
-import type { ApiResponse, Group } from "@/lib/api-types";
+import type { ApiResponse, Chat, Group } from "@/lib/api-types";
 
 export const groupService = {
-  async create(payload: { name: string; description?: string | null; memberIds?: string[] }) {
-    const { data } = await axiosInstance.post<ApiResponse<{ group: Group }>>("/group", payload);
-    return data.data.group;
+  async create(payload: {
+    name: string;
+    description?: string | null;
+    avatar?: string | null;
+    memberIds?: string[];
+  }) {
+    const { data } = await axiosInstance.post<ApiResponse<{ group: Group; chat?: Chat }>>(
+      "/group",
+      payload,
+    );
+    const group = data.data.group;
+    const chat = data.data.chat ?? null;
+    return { group, chat, chatId: group?.chatId ?? chat?._id ?? null };
   },
   async list() {
     const { data } = await axiosInstance.get<ApiResponse<{ groups: Group[] }>>("/group");
@@ -14,8 +24,14 @@ export const groupService = {
     const { data } = await axiosInstance.get<ApiResponse<{ group: Group }>>(`/group/${groupId}`);
     return data.data.group;
   },
-  async update(groupId: string, payload: { name?: string; description?: string | null; avatar?: string | null }) {
-    const { data } = await axiosInstance.patch<ApiResponse<{ group: Group }>>(`/group/${groupId}`, payload);
+  async update(
+    groupId: string,
+    payload: { name?: string; description?: string | null; avatar?: string | null },
+  ) {
+    const { data } = await axiosInstance.patch<ApiResponse<{ group: Group }>>(
+      `/group/${groupId}`,
+      payload,
+    );
     return data.data.group;
   },
   async addMembers(groupId: string, memberIds: string[]) {

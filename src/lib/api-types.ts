@@ -94,6 +94,8 @@ export type GroupMember = {
   role?: "admin" | "member";
   isAdmin?: boolean;
   joinedAt?: string;
+  leftAt?: string | null;
+  isMuted?: boolean;
 };
 
 export type Group = {
@@ -102,6 +104,8 @@ export type Group = {
   description?: string | null;
   avatar?: string | null;
   chat?: string | Chat;
+  /** Backend attaches the linked group chat id on every group payload. */
+  chatId?: string | null;
   createdBy?: User | string;
   members?: GroupMember[];
   settings?: {
