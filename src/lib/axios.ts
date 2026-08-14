@@ -45,19 +45,10 @@ axiosInstance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 let refreshing: Promise<string | null> | null = null;
 
-function getCurrentRoutePath() {
-  if (typeof window === "undefined") return "/";
-  const hashPath = window.location.hash.startsWith("#/") ? window.location.hash.slice(1) : "";
-  return hashPath || window.location.pathname || "/";
-}
-
 function redirectToLogin() {
   tokenStore.clear();
-  if (typeof window !== "undefined") {
-    const currentPath = getCurrentRoutePath();
-    if (!currentPath.startsWith("/auth")) {
-      window.location.hash = "/auth";
-    }
+  if (typeof window !== "undefined" && !window.location.pathname.startsWith("/auth")) {
+    window.location.href = "/auth";
   }
 }
 

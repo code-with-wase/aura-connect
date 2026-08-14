@@ -4,11 +4,13 @@ import {
   Contact as ContactIcon,
   LogOut,
   MessageSquare,
+  MessagesSquare,
   Moon,
   Phone,
   Radio,
   Settings,
   Sun,
+  User as UserIcon,
   Users,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -28,6 +30,14 @@ const NAV = [
   { to: "/calls", label: "Calls", icon: Phone },
   { to: "/notifications", label: "Notifications", icon: Bell },
   { to: "/settings", label: "Settings", icon: Settings },
+] as const;
+
+/** Primary mobile tabs — mirrors the reference mobile layout. */
+const MOBILE_NAV = [
+  { to: "/", label: "Chats", icon: MessagesSquare },
+  { to: "/status", label: "Status", icon: Radio },
+  { to: "/groups", label: "Groups", icon: Users },
+  { to: "/settings", label: "You", icon: UserIcon },
 ] as const;
 
 const THEME_KEY = "nexora-theme-mode";
@@ -68,18 +78,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       .catch(() => setUnread(0));
   }, [user, pathname]);
 
-  if (loading || !user) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-          <p className="text-sm text-muted-foreground">
-            {!user ? "Redirecting to sign in…" : "Loading your workspace…"}
-          </p>
-        </div>
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
       </div>
     );
   }
+
+  if (!user) return null;
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -124,19 +131,19 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col pb-14 md:pb-0">{children}</div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between border-t border-border bg-surface/95 px-1 py-1 backdrop-blur md:hidden">
-        {NAV.map((item) => {
+      <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-stretch justify-between border-t border-border bg-surface/95 px-2 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
+        {MOBILE_NAV.map((item) => {
           const active = item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
           return (
             <Link
               key={item.to}
               to={item.to}
               className={cn(
-                "flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[10px] font-medium text-muted-foreground transition-colors",
-                active && "bg-accent/10 text-accent",
+                "flex flex-1 flex-col items-center gap-1 rounded-xl py-1 text-[11px] font-semibold text-muted-foreground transition-colors",
+                active && "text-accent",
               )}
             >
-              <item.icon className="h-4 w-4" />
+              <item.icon className={cn("h-[22px] w-[22px]", active && "text-accent")} strokeWidth={active ? 2.4 : 1.9} />
               {item.label}
             </Link>
           );
