@@ -109,6 +109,21 @@ function SettingsPage() {
         }
       />
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 md:px-6">
+        <nav className="grid grid-cols-3 gap-2 md:hidden">
+          {[
+            { to: "/contacts", label: "Contacts" },
+            { to: "/calls", label: "Calls" },
+            { to: "/notifications", label: "Alerts" },
+          ].map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              className="rounded-xl border border-border bg-surface px-3 py-3 text-center text-sm font-medium text-foreground"
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
         <section className="rounded-lg border border-border bg-surface p-4 md:p-6">
           <div className="mb-4 flex items-center gap-3">
             <UserAvatar name={user.name} src={user.avatar} size={56} online={user.isOnline} />
