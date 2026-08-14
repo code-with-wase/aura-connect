@@ -195,7 +195,7 @@ function Inbox() {
           </div>
         </div>
 
-        <ScrollArea className="min-h-0 flex-1">
+        <ScrollArea className="min-h-0 flex-1 px-2 pb-3">
           {loading && <LoadingState label="Loading conversations…" />}
           {!loading && error && <ErrorState message={error} onRetry={() => void load()} />}
           {!loading && !error && filtered.length === 0 && (
