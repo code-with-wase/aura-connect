@@ -199,6 +199,9 @@ export function ChatWindow({
   const fileRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const readRef = useRef<Set<string>>(new Set());
+  /** Keeps parent callbacks out of effect deps so the chat never re-mounts/reloads. */
+  const chatsChangedRef = useRef(onChatsChanged);
+  chatsChangedRef.current = onChatsChanged;
 
   const isGroup = isGroupChat(chat);
   const chatPartner = otherParticipant(chat, user?._id);
@@ -227,13 +230,13 @@ export function ChatWindow({
       setMessages((prev) =>
         prev.map((m) => (pending.some((p) => p._id === m._id) ? { ...m, status: "read" } : m)),
       );
-      onChatsChanged();
+      chatsChangedRef.current();
     },
-    [chat._id, user?._id, onChatsChanged],
+    [chat._id, user?._id],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoading(true);
     setError(null);
     try {
       const data = await messageService.listByChat(chat._id);
@@ -243,14 +246,16 @@ export function ChatWindow({
     } catch (err) {
       setError(getApiErrorMessage(err, "Unable to load messages"));
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, [chat._id, acknowledge]);
 
   useEffect(() => {
     readRef.current = new Set();
     void load();
-  }, [load]);
+    // Reload only when the conversation changes — not on every parent re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat._id]);
 
   /** Serverless backend => sockets are unreliable, so keep a light poll in sync. */
   useEffect(() => {
@@ -306,7 +311,7 @@ export function ChatWindow({
       if (!message?._id || message.chat !== chat._id) return;
       setMessages((prev) => (prev.some((m) => m._id === message._id) ? prev : [...prev, message]));
       void acknowledge([message]);
-      onChatsChanged();
+      chatsChangedRef.current();
     };
     const onTyping = (payload: { chatId?: string; userId?: string; name?: string }) => {
       if (payload?.chatId !== chat._id || payload.userId === user?._id) return;
@@ -326,7 +331,7 @@ export function ChatWindow({
       socket.off("typing:start", onTyping);
       socket.off("typing:stop");
     };
-  }, [chat._id, user?._id, onChatsChanged, acknowledge]);
+  }, [chat._id, user?._id, acknowledge]);
 
   function emitTyping() {
     getSocket()?.emit("typing:start", { chatId: chat._id });
