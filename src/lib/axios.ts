@@ -115,22 +115,27 @@ function friendlyMessage(status: number | undefined, url: string, method: string
     case 400:
       return "Some details are invalid. Please review and try again.";
     case 401:
-      return "Your session expired. Please sign in again.";
+      return "Session expired. Please sign in again.";
     case 403:
-      return "You do not have permission to do that.";
+      return "You don't have permission to perform this action.";
     case 404:
       return "We could not find what you were looking for.";
     case 409:
       return "That already exists.";
     case 413:
       return "That file is too large.";
+    case 415:
+      return "That file type is not supported.";
+    case 422:
+      return "Some fields are not valid. Please review the form.";
     case 429:
       return "Too many attempts. Please wait a moment and try again.";
     case 500:
+      return "Server error. Please try again.";
     case 502:
     case 503:
     case 504:
-      return "The server is not responding right now. Please try again shortly.";
+      return "The server is temporarily unavailable. Please try again shortly.";
     default:
       return null;
   }
@@ -139,10 +144,13 @@ function friendlyMessage(status: number | undefined, url: string, method: string
 export function getApiErrorMessage(error: unknown, fallback = "Something went wrong"): string {
   if (axios.isAxiosError(error)) {
     if (error.code === "ECONNABORTED" || error.message?.includes("timeout")) {
-      return "The request timed out. Please check your connection and try again.";
+      return "The request took too long to respond. Please try again.";
     }
     if (!error.response) {
-      return "No internet connection. Please check your network and try again.";
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        return "You appear to be offline. Check your internet connection and try again.";
+      }
+      return "Unable to reach the server right now. Please try again in a moment.";
     }
 
     const data = error.response.data as

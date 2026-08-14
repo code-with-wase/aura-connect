@@ -248,6 +248,12 @@ function GroupDetails({
         </form>
       )}
 
+      <p className="rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted-foreground">
+        Group messaging is not exposed by the backend yet: the group API does not create a chat thread
+        (<code>POST /chat</code> only creates private chats), so messages cannot be posted to a group until the
+        backend links groups to a chat. Group creation, members, admins and permissions below are fully live.
+      </p>
+
       {canManage && (
         <section className="space-y-3 rounded-md border border-border p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
