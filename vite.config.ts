@@ -19,13 +19,5 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    rollupOptions: {
-      external: [
-        '@capacitor-community/contacts',
-        '@capacitor/app',
-        '@capacitor/splash-screen',
-        '@capacitor/status-bar',
-      ],
-    },
   },
 })
