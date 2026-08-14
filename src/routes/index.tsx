@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Loader2, MessageSquarePlus, Search } from "lucide-react";
+import { Loader2, Pin, Plus, Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -26,8 +26,10 @@ import {
   chatTitle,
   chatUnreadCount,
   formatTime,
+  isGroupChat,
   isPresenceOnline,
   messagePreview,
+  myParticipant,
   otherParticipant,
 } from "@/lib/chat-utils";
 import { getSocket } from "@/lib/socket";
@@ -62,6 +64,9 @@ function InboxPage() {
   );
 }
 
+const FILTERS = ["All", "Unread", "Direct", "Groups", "Pinned"] as const;
+type Filter = (typeof FILTERS)[number];
+
 function Inbox() {
   const { user } = useAuth();
   const [chats, setChats] = useState<Chat[]>([]);
@@ -69,6 +74,7 @@ function Inbox() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("All");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -113,12 +119,27 @@ function Inbox() {
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    const sorted = [...chats].sort(
-      (a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime(),
-    );
-    if (!term) return sorted;
-    return sorted.filter((chat) => chatTitle(chat, user?._id).toLowerCase().includes(term));
-  }, [chats, query, user?._id]);
+    const isPinned = (chat: Chat) =>
+      myParticipant(chat, user?._id)?.isPinned ?? chat.isPinned ?? false;
+    const sorted = [...chats].sort((a, b) => {
+      const pinDiff = Number(isPinned(b)) - Number(isPinned(a));
+      if (pinDiff !== 0) return pinDiff;
+      return new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime();
+    });
+    return sorted.filter((chat) => {
+      if (term && !chatTitle(chat, user?._id).toLowerCase().includes(term)) return false;
+      if (filter === "Unread") return chatUnreadCount(chat, user?._id) > 0;
+      if (filter === "Direct") return !isGroupChat(chat);
+      if (filter === "Groups") return isGroupChat(chat);
+      if (filter === "Pinned") return isPinned(chat);
+      return true;
+    });
+  }, [chats, query, filter, user?._id]);
+
+  const totalUnread = useMemo(
+    () => chats.reduce((sum, chat) => sum + chatUnreadCount(chat, user?._id), 0),
+    [chats, user?._id],
+  );
 
   const active = chats.find((chat) => chat._id === activeId) ?? null;
 
@@ -130,9 +151,16 @@ function Inbox() {
           active && "hidden md:flex",
         )}
       >
-        <div className="space-y-3 border-b border-border px-4 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-lg font-semibold text-foreground">Chats</h1>
+        <div className="space-y-4 px-4 pb-3 pt-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="font-display text-[28px] font-bold leading-none tracking-tight text-foreground">
+                Nexora
+              </h1>
+              <p className="mt-1.5 text-[13px] text-muted-foreground">
+                {totalUnread > 0 ? `${totalUnread} unread message${totalUnread === 1 ? "" : "s"}` : "You are all caught up"}
+              </p>
+            </div>
             <NewChatDialog
               onCreated={(chat) => {
                 setChats((prev) => (prev.some((c) => c._id === chat._id) ? prev : [chat, ...prev]));
@@ -141,14 +169,29 @@ function Inbox() {
             />
           </div>
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search conversations"
-              className="pl-9"
-              aria-label="Search conversations"
+              placeholder="Search people and messages"
+              className="h-12 rounded-2xl border-transparent bg-surface-hover pl-11 text-sm"
+              aria-label="Search people and messages"
             />
+          </div>
+          <div className="-mx-1 flex items-center gap-1 overflow-x-auto pb-0.5">
+            {FILTERS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setFilter(item)}
+                className={cn(
+                  "shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-semibold text-muted-foreground transition-colors",
+                  filter === item && "bg-accent/12 text-accent",
+                )}
+              >
+                {item}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -166,36 +209,55 @@ function Inbox() {
             filtered.map((chat) => {
               const partner = otherParticipant(chat, user?._id);
               const unread = chatUnreadCount(chat, user?._id);
+              const pinned = myParticipant(chat, user?._id)?.isPinned ?? chat.isPinned ?? false;
+              const isActive = activeId === chat._id;
               return (
                 <button
                   key={chat._id}
                   type="button"
                   onClick={() => setActiveId(chat._id)}
                   className={cn(
-                    "flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition-colors hover:bg-surface-hover",
-                    activeId === chat._id && "bg-accent/8",
+                    "relative flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-surface-hover",
+                    isActive && "bg-accent/10",
                   )}
                 >
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 h-8 w-[3px] -translate-y-1/2 rounded-full bg-accent" />
+                  )}
                   <UserAvatar
                     name={chatTitle(chat, user?._id)}
                     src={chatAvatar(chat, user?._id)}
+                    size={48}
                     online={isPresenceOnline(partner)}
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-foreground">
-                        {chatTitle(chat, user?._id)}
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span
+                          className={cn(
+                            "truncate text-[15px] font-semibold text-foreground",
+                            isActive && "text-accent",
+                          )}
+                        >
+                          {chatTitle(chat, user?._id)}
+                        </span>
+                        {pinned && <Pin className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
                       </span>
-                      <span className="shrink-0 text-[11px] text-muted-foreground">
+                      <span className="shrink-0 text-[12px] text-muted-foreground">
                         {formatTime(chat.lastMessage?.createdAt ?? chat.updatedAt)}
                       </span>
                     </span>
-                    <span className="flex items-center justify-between gap-2">
-                      <span className="truncate text-xs text-muted-foreground">
+                    <span className="mt-1 flex items-center justify-between gap-2">
+                      <span
+                        className={cn(
+                          "truncate text-[13px] text-muted-foreground",
+                          unread > 0 && "font-medium text-foreground",
+                        )}
+                      >
                         {messagePreview(chat.lastMessage)}
                       </span>
                       {unread > 0 && (
-                        <span className="rounded-full bg-accent px-1.5 text-[10px] font-semibold text-accent-foreground">
+                        <span className="flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold text-accent-foreground">
                           {unread}
                         </span>
                       )}
@@ -267,9 +329,12 @@ function NewChatDialog({ onCreated }: { onCreated: (chat: Chat) => void }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          <MessageSquarePlus className="mr-2 h-4 w-4" />
-          New
+        <Button
+          size="icon"
+          aria-label="New conversation"
+          className="h-12 w-12 rounded-2xl bg-accent text-accent-foreground shadow-lg shadow-accent/25 hover:bg-accent/90"
+        >
+          <Plus className="h-5 w-5" strokeWidth={2.6} />
         </Button>
       </DialogTrigger>
       <DialogContent>
